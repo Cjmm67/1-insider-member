@@ -48,10 +48,38 @@ const CATEGORIES = [
 const fmtDate = d => new Date(d).toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'});
 const fmtNum = n => new Intl.NumberFormat('en-SG').format(n);
 
-// ─── STORAGE ─────────────────────────────────────────────────────────────────
-const store = {
-  async get(k){ try{ const r=await window.storage.get(k); return r?JSON.parse(r.value):null }catch{ return null }},
-  async set(k,v){ try{ await window.storage.set(k,JSON.stringify(v)); return true }catch{ return false }},
+// ─── SUPABASE ────────────────────────────────────────────────────────────────
+const SUPA_URL = "https://tobtmtshxgpkkucsaxyk.supabase.co";
+const SUPA_KEY = "sb_publishable_M_yQLmU_5yc0yTccm4F_oA_xWKyTqx9";
+const supaFetch = async (path, opts = {}) => {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
+    headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": opts.prefer || "return=representation", ...opts.headers },
+    method: opts.method || "GET", body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  return res.json();
+};
+const mapMember = m => ({
+  id:m.id, name:m.name, mobile:m.mobile, email:m.email, tier:m.tier, points:m.points,
+  totalSpend:m.total_spend||0, categoryPref:m.category_pref||"restaurants", birthdayMonth:m.birthday_month||1,
+  signupDate:m.signup_date||m.created_at, lastVisit:m.last_visit||m.created_at, visits:m.visits||0,
+  favouriteVenue:m.favourite_venue||"oumi", stamps:m.stamps||0, voucherSetsUsed:m.voucher_sets_used||0,
+  membershipExpiry:m.membership_expiry||null,
+});
+const db = {
+  async getMembers(){ try{ const d=await supaFetch("members?order=id.asc"); return Array.isArray(d)?d.map(mapMember):[]; }catch{ return []; }},
+  async getRewards(){ try{ const d=await supaFetch("rewards?active=eq.true&order=points_cost.asc"); return Array.isArray(d)?d:[]; }catch{ return []; }},
+  async getTransactions(memberId){ try{ const d=await supaFetch(`transactions?member_id=eq.${memberId}&order=created_at.desc`); return Array.isArray(d)?d:[]; }catch{ return []; }},
+  async getTiers(){ try{ const d=await supaFetch("tiers?order=threshold.asc"); return Array.isArray(d)?d:[]; }catch{ return []; }},
+  async redeemReward(memberId, reward, currentPoints){
+    const newPoints = currentPoints - reward.points_cost;
+    // Deduct points
+    await supaFetch(`members?id=eq.${memberId}`, { method:"PATCH", body:{points:newPoints} });
+    // Increment redemptions
+    await supaFetch(`rewards?id=eq.${reward.id}`, { method:"PATCH", body:{redemptions:(reward.redemptions||0)+1} });
+    // Insert transaction
+    await supaFetch("transactions", { method:"POST", body:{member_id:memberId, venue:"1-Insider Rewards", amount:0, points:-reward.points_cost, type:"redeem", reward_name:reward.name} });
+    return newPoints;
+  },
 };
 
 // ─── TYPOGRAPHY & STYLES ────────────────────────────────────────────────────
@@ -68,30 +96,7 @@ const tierColors = {
   staff: { text:"#2E7D32", bg:"#E8F5E9", accent:"#2E7D32", card:"linear-gradient(135deg,#2E7D32 0%,#4CAF50 100%)" },
 };
 
-// ─── SEED ACTIVITY ──────────────────────────────────────────────────────────
-const genActivity = (member) => {
-  const acts = [];
-  const types = ["earn","earn","earn","redeem","earn","earn"];
-  for(let i=0;i<12;i++){
-    const type = types[i%types.length];
-    const venue = VENUES[Math.floor(Math.random()*VENUES.length)];
-    const pts = type==="earn"?Math.floor(Math.random()*200+20):-(Math.floor(Math.random()*300+100));
-    const d = new Date(2026,3-Math.floor(i/3),28-i*2);
-    acts.push({ id:i, type, venue:venue.name, points:pts, date:d.toISOString(), desc:type==="earn"?`Dining at ${venue.name}`:`Redeemed voucher` });
-  }
-  return acts;
-};
-
-const genRewards = () => [
-  { id:"r1", name:"$10 Dining Voucher", category:"restaurants", points:500, desc:"Valid at any restaurant venue", icon:"🍽️" },
-  { id:"r2", name:"$15 Bar Credit", category:"bars", points:750, desc:"Cocktails on the house", icon:"🍸" },
-  { id:"r3", name:"Café Brunch for 2", category:"cafes", points:400, desc:"Any Wildseed Café outlet", icon:"☕" },
-  { id:"r4", name:"Wine Tasting Experience", category:"wines", points:1200, desc:"Curated 5-glass flight at Sol & Ora", icon:"🍷" },
-  { id:"r5", name:"$20 Dining Voucher", category:"restaurants", points:1000, desc:"Fine dining redemption", icon:"🍽️" },
-  { id:"r6", name:"Cocktail Masterclass", category:"bars", points:1500, desc:"Private session at 1918 Heritage Bar", icon:"🍸" },
-  { id:"r7", name:"Pastry Box (6 pcs)", category:"cafes", points:300, desc:"Wildseed signature pastries", icon:"☕" },
-  { id:"r8", name:"Bottle of House Wine", category:"wines", points:2000, desc:"Premium selection, dine-in only", icon:"🍷" },
-];
+// (Seed data removed — using Supabase for members, rewards, transactions)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APP
@@ -106,30 +111,27 @@ export default function App() {
   const [loading,setLoading]=useState(true);
   const [catFilter,setCatFilter]=useState("all");
   const [redeemModal,setRedeemModal]=useState(null);
+  const [redeemSuccess,setRedeemSuccess]=useState(false);
+  const [supaRewards,setSupaRewards]=useState([]);
+  const [transactions,setTransactions]=useState([]);
 
   useEffect(()=>{(async()=>{
-    let m=await store.get("eber-members");
-    if(!m||!m.length){
-      // Import seed from admin if available, or create demo member
-      m=[{
-        id:"M0001",name:"Sophia Chen",mobile:"+65 91234567",tier:"gold",
-        points:2450,totalSpend:6800,categoryPref:"restaurants",birthdayMonth:3,
-        signupDate:"2024-06-15T00:00:00.000Z",lastVisit:"2025-04-20T00:00:00.000Z",
-        visits:28,favouriteVenue:"oumi",email:"sophia.chen@email.com",stamps:6,
-        voucherSetsUsed:2,membershipExpiry:"2026-09-15T00:00:00.000Z",renewalStatus:null,
-      }];
-    }
-    setMembers(m);
+    // Load members from Supabase
+    const m = await db.getMembers();
+    setMembers(m.length ? m : []);
+    // Load rewards from Supabase
+    const r = await db.getRewards();
+    setSupaRewards(r);
     setLoading(false);
   })()},[]);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const found = members.find(m=>m.mobile.replace(/\s/g,'').includes(phone.replace(/\s/g,'').replace('+65','')));
-    if(found){
-      setMember(found);
-      setView("dashboard");
-    } else if(members.length>0){
-      setMember(members[0]);
+    const loggedIn = found || (members.length>0 ? members[0] : null);
+    if(loggedIn){
+      setMember(loggedIn);
+      const txs = await db.getTransactions(loggedIn.id);
+      setTransactions(txs);
       setView("dashboard");
     }
   };
@@ -254,8 +256,16 @@ export default function App() {
   // ─── MEMBER DASHBOARD ────────────────────────────────────────────────────
   const tier = TIERS.find(t=>t.id===member?.tier)||TIERS[0];
   const tc = tierColors[member?.tier||"silver"];
-  const activity = genActivity(member);
-  const rewards = genRewards();
+  // Use real transactions from Supabase
+  const activity = transactions.map((t,i)=>({
+    id:t.id||i, type:t.type, venue:t.venue||t.reward_name, points:t.points,
+    date:t.created_at, desc:t.type==="redeem"?`Redeemed: ${t.reward_name}`:`Dining at ${t.venue}`,
+  }));
+  // Use Supabase rewards, mapped to UI format
+  const catIcons = {cafes:"☕",restaurants:"🍽️",bars:"🍸",wines:"🍷"};
+  const rewards = supaRewards.filter(r=>r.points_cost>0).map(r=>({
+    ...r, icon:catIcons[r.category]||"★", points:r.points_cost,
+  }));
   const filteredRewards = catFilter==="all"?rewards:rewards.filter(r=>r.category===catFilter);
   const activeVouchers = [
     {name:"Welcome $10 Voucher",value:10,expiry:"2026-05-15",status:"active"},
@@ -386,7 +396,7 @@ export default function App() {
                     <span style={{fontSize:20}}>{r.icon}</span>
                     <div style={{fontWeight:600,fontSize:14}}>{r.name}</div>
                   </div>
-                  <div style={{fontSize:11,color:"#888",marginTop:4,marginLeft:28}}>{r.desc}</div>
+                  <div style={{fontSize:11,color:"#888",marginTop:4,marginLeft:28}}>{r.description}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:16,fontWeight:700,fontFamily:font.h,color:"#C5A258"}}>{fmtNum(r.points)}</div>
@@ -403,12 +413,21 @@ export default function App() {
             <div style={{background:"#fff",borderRadius:16,padding:28,maxWidth:340,width:"100%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
               <div style={{fontSize:36,marginBottom:12}}>{redeemModal.icon}</div>
               <h3 style={{fontFamily:font.h,fontSize:20,margin:"0 0 8px"}}>{redeemModal.name}</h3>
-              <p style={{color:"#888",fontSize:12,margin:"0 0 20px"}}>{redeemModal.desc}</p>
+              <p style={{color:"#888",fontSize:12,margin:"0 0 20px"}}>{redeemModal.description}</p>
               <div style={{background:"#FAF8F5",borderRadius:10,padding:14,marginBottom:20}}>
                 <div style={{fontSize:10,color:"#999",textTransform:"uppercase",letterSpacing:1}}>Cost</div>
                 <div style={{fontSize:28,fontWeight:700,fontFamily:font.h,color:"#C5A258"}}>{fmtNum(redeemModal.points)} pts</div>
               </div>
-              <button onClick={()=>setRedeemModal(null)} style={{width:"100%",background:"#C5A258",color:"#fff",border:"none",padding:14,borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:font.b}}>Confirm Redemption</button>
+              <button onClick={async()=>{
+                const newPts = await db.redeemReward(member.id, redeemModal, member.points);
+                setMember(prev=>({...prev,points:newPts}));
+                const txs = await db.getTransactions(member.id);
+                setTransactions(txs);
+                const freshRewards = await db.getRewards();
+                setSupaRewards(freshRewards);
+                setRedeemSuccess(true);
+                setTimeout(()=>{setRedeemModal(null);setRedeemSuccess(false)},2000);
+              }} style={{width:"100%",background:"#C5A258",color:"#fff",border:"none",padding:14,borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:font.b}}>{redeemSuccess?"✓ Redeemed!":"Confirm Redemption"}</button>
               <button onClick={()=>setRedeemModal(null)} style={{marginTop:10,background:"none",border:"none",color:"#888",fontSize:12,cursor:"pointer"}}>Cancel</button>
             </div>
           </div>}
