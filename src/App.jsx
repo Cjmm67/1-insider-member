@@ -276,18 +276,20 @@ function Home({ member, transactions, setView, reload }) {
   const info = TIER_INFO[member.tier] || TIER_INFO.silver;
   const isDark = ["platinum", "corporate", "staff"].includes(member.tier);
 
-  const [vouchersUsed, setVouchersUsed] = useState(0);
+  
   const [showUseVoucher, setShowUseVoucher] = useState(false);
   const [voucherUsed, setVoucherUsed] = useState(null);
 
-  const vouchersRemaining = Math.max(0, (info.vCount || 0) - vouchersUsed);
+  const vouchersRemaining = member.vouchers_remaining != null ? member.vouchers_remaining : (info.vCount || 0);
   const hasNonStop = info.nonStop;
 
-  const useVoucher = () => {
-    setVouchersUsed(prev => prev + 1);
+  const useVoucher = async () => {
+    var newV = Math.max(0, vouchersRemaining - 1);
+    await supaFetch("members?id=eq." + member.id, { method: "PATCH", body: { vouchers_remaining: newV } });
+    await supaFetch("transactions", { method: "POST", body: { member_id: member.id, venue: "1-Insider Vouchers", amount: info.vValue, points: 0, type: "redeem", reward_name: "$" + info.vValue + " Dining Voucher (Non-Stop Hits)" } });
     setVoucherUsed(true);
     setShowUseVoucher(false);
-    supaFetch("transactions", { method: "POST", body: { member_id: member.id, venue: "1-Insider Vouchers", amount: 0, points: 0, type: "redeem", reward_name: "$" + info.vValue + " Dining Voucher" } });
+    reload();
     setTimeout(() => setVoucherUsed(null), 3000);
   };
 
@@ -339,9 +341,9 @@ function Home({ member, transactions, setView, reload }) {
               {Array.from({ length: info.vCount }).map((_, i) => (
                 <div key={i} style={{
                   width: 22, height: 22, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10,
-                  background: i < vouchersUsed ? "rgba(255,255,255,.1)" : C.gold,
-                  color: i < vouchersUsed ? "#666" : "#fff", fontWeight: 600,
-                }}>{i < vouchersUsed ? "✓" : "$"}</div>
+                  background: i < (10 - vouchersRemaining) ? "rgba(255,255,255,.1)" : C.gold,
+                  color: i < (10 - vouchersRemaining) ? "#666" : "#fff", fontWeight: 600,
+                }}>{i < (10 - vouchersRemaining) ? "✓" : "$"}</div>
               ))}
             </div>
           </div>
