@@ -539,39 +539,50 @@ function RewardsView({ member, rewards, reload }) {
 
 function StampsView({ member, reload }) {
   const stampCount = member.stamps || 0;
+  const displayStamps = Math.min(stampCount, 10);
   const [claiming, setClaiming] = useState(null);
-  const [claimed, setClaimed] = useState([]);
+  const [lastClaimed, setLastClaimed] = useState(null);
 
   const claimReward = async (milestone) => {
     setClaiming(milestone.s);
     var newStamps = Math.max(0, stampCount - milestone.s);
     await supaFetch("members?id=eq." + member.id, { method: "PATCH", body: { stamps: newStamps } });
-    await supaFetch("transactions", { method: "POST", body: { member_id: member.id, venue: "Wildseed Café", amount: 0, points: 0, type: "redeem", reward_name: "Stamp Reward: " + milestone.reward, note: "Claimed at " + milestone.s + " stamps — " + milestone.s + " stamps burned" } });
-    setClaimed(prev => [...prev, milestone.s]);
+    await supaFetch("transactions", { method: "POST", body: { member_id: member.id, venue: "Wildseed Café", amount: 0, points: 0, type: "redeem", reward_name: "Stamp Reward: " + milestone.reward, note: stampCount + " stamps → claimed " + milestone.reward + " (cost " + milestone.s + ") → " + newStamps + " stamps remaining" } });
+    setLastClaimed({ reward: milestone.reward, burned: milestone.s, remaining: newStamps });
     setClaiming(null);
-    reload();
+    await reload();
+    setTimeout(function() { setLastClaimed(null); }, 5000);
   };
 
   return (
     <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
       <h2 style={s.h2}>Café Stamps</h2>
-      <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Earn 1 stamp per $10 spent at Wildseed Café outlets</div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>Earn 1 stamp per $10 spent at Wildseed Café outlets</div>
+      <div style={{ fontSize: 12, color: C.text, marginBottom: 20, lineHeight: 1.6 }}>
+        Redeeming a reward <strong>burns</strong> that number of stamps. For example: 5 stamps → claim 3-stamp reward → 2 stamps remain → earn 3 more to reach the next reward.
+      </div>
 
+      {/* Claim success banner */}
+      {lastClaimed && (
+        <div style={{ background: "#E8F5E9", border: "1px solid #A5D6A7", borderRadius: 10, padding: 14, fontSize: 13, color: "#1B5E20", marginBottom: 16 }}>
+          ✅ <strong>{lastClaimed.reward}</strong> claimed! {lastClaimed.burned} stamps burned → {lastClaimed.remaining} stamps remaining.
+        </div>
+      )}
+
+      {/* Stamp Grid — 10 slots per cycle */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 24 }}>
-        {STAMPS.map((st, i) => {
-          var filled = i < stampCount;
+        {STAMPS.map(function(st, i) {
+          var filled = i < displayStamps;
           var hasReward = !!st.reward;
-          var isClaimed = claimed.includes(st.s);
           return (
             <div key={i} style={{
               aspectRatio: "1", borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              background: isClaimed ? "#E8F5E9" : filled ? (hasReward ? C.gold : "#333") : (hasReward ? "#FFF8E1" : "#f5f5f5"),
-              border: hasReward ? "2px solid " + (isClaimed ? "#4CAF50" : st.auto ? "#4CAF50" : "#FFB300") : "2px solid transparent",
-              color: isClaimed ? "#4CAF50" : filled ? "#fff" : C.text,
+              background: filled ? (hasReward ? C.gold : "#333") : (hasReward ? "#FFF8E1" : "#f5f5f5"),
+              border: hasReward ? "2px solid " + (st.auto ? "#4CAF50" : "#FFB300") : "2px solid transparent",
+              color: filled ? "#fff" : C.text,
             }}>
               <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 700 }}>{st.s}</div>
-              {isClaimed ? <div style={{ fontSize: 8, fontWeight: 700, color: "#4CAF50" }}>CLAIMED</div>
-                : filled ? <div style={{ fontSize: 10, marginTop: 2 }}>✓</div>
+              {filled ? <div style={{ fontSize: 10, marginTop: 2 }}>✓</div>
                 : hasReward ? <div style={{ fontSize: 6, fontWeight: 700, color: st.auto ? "#2E7D32" : "#F57F17", marginTop: 1 }}>{st.auto ? "AUTO" : "🎁"}</div>
                 : null}
             </div>
@@ -579,58 +590,65 @@ function StampsView({ member, reload }) {
         })}
       </div>
 
+      {/* Progress */}
       <div style={{ ...s.card, textAlign: "center" }}>
-        <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 700, color: C.gold }}>{stampCount}/10</div>
+        <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 700, color: C.gold }}>{stampCount}</div>
         <div style={{ fontSize: 12, color: C.muted }}>stamps collected</div>
         <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, marginTop: 12, overflow: "hidden" }}>
-          <div style={{ height: 6, background: C.gold, borderRadius: 3, width: (stampCount / 10 * 100) + "%", transition: "width .3s" }} />
+          <div style={{ height: 6, background: C.gold, borderRadius: 3, width: Math.min(100, stampCount / 10 * 100) + "%", transition: "width .3s" }} />
         </div>
       </div>
 
+      {/* Reward Cards */}
       <h3 style={{ ...s.h3, marginTop: 20 }}>Stamp Rewards</h3>
-      {STAMPS.filter(st => st.reward).map((st, i) => {
-        var unlocked = stampCount >= st.s;
-        var alreadyClaimed = claimed.includes(st.s);
+      {STAMPS.filter(function(st) { return st.reward; }).map(function(st, i) {
+        var canClaim = stampCount >= st.s;
+        var stampsNeeded = Math.max(0, st.s - stampCount);
         var isLoading = claiming === st.s;
         return (
-          <div key={i} style={{ ...s.card, display: "flex", alignItems: "center", gap: 12, opacity: unlocked ? 1 : 0.45 }}>
+          <div key={i} style={{ ...s.card, display: "flex", alignItems: "center", gap: 12, opacity: canClaim ? 1 : 0.55 }}>
             <div style={{
-              width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, flexShrink: 0,
-              background: alreadyClaimed ? "#4CAF50" : unlocked ? C.gold : "#eee",
-              color: alreadyClaimed || unlocked ? "#fff" : C.muted,
-            }}>{alreadyClaimed ? "✓" : st.s}</div>
+              width: 44, height: 44, borderRadius: "50%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              background: canClaim ? C.gold : "#f0f0f0", color: canClaim ? "#fff" : C.muted,
+            }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{st.s}</div>
+              <div style={{ fontSize: 7, fontWeight: 600 }}>stamps</div>
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 13 }}>{st.reward}</div>
               {st.note && <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{st.note}</div>}
-              <div style={{ fontSize: 10, marginTop: 3 }}>
-                {st.auto ? (
-                  <span style={{ color: "#4CAF50", fontWeight: 600 }}>{"Auto-issued at " + st.s + " stamps"}</span>
-                ) : (
-                  <span style={{ color: "#FF9800", fontWeight: 600 }}>{"Claim at " + st.s + " stamps · Burns " + st.s + " stamps"}</span>
-                )}
-              </div>
+              {canClaim ? (
+                <div style={{ fontSize: 10, marginTop: 3, color: "#4CAF50", fontWeight: 600 }}>
+                  {st.auto ? "Auto-issued ✓" : "Ready to claim · Uses " + st.s + " of your " + stampCount + " stamps"}
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, marginTop: 3, color: "#FF9800", fontWeight: 600 }}>
+                  {"Need " + stampsNeeded + " more stamp" + (stampsNeeded !== 1 ? "s" : "") + " · You have " + stampCount + " of " + st.s + " required"}
+                </div>
+              )}
             </div>
-            {!st.auto && unlocked && !alreadyClaimed && (
-              <button onClick={() => claimReward(st)} disabled={isLoading} style={{ ...s.btnSm, fontSize: 11, padding: "8px 14px", opacity: isLoading ? 0.5 : 1 }}>
+            {!st.auto && canClaim && (
+              <button onClick={function() { claimReward(st); }} disabled={isLoading} style={{ ...s.btnSm, fontSize: 11, padding: "8px 14px", opacity: isLoading ? 0.5 : 1 }}>
                 {isLoading ? "…" : "Claim"}
               </button>
             )}
-            {alreadyClaimed && <span style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600 }}>Claimed ✓</span>}
-            {st.auto && unlocked && !alreadyClaimed && <span style={{ color: "#4CAF50", fontSize: 11, fontWeight: 600 }}>Issued ✓</span>}
+            {st.auto && canClaim && <span style={{ color: "#4CAF50", fontSize: 11, fontWeight: 600 }}>Issued ✓</span>}
           </div>
         );
       })}
 
       <h3 style={{ ...s.h3, marginTop: 24 }}>Participating Outlets</h3>
-      {VENUES.filter(v => v.stamps).map((v, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f5f5f5", fontSize: 12.5 }}>
-          <span>☕</span>
-          <div>
-            <div style={{ fontWeight: 500 }}>{v.name}</div>
-            <div style={{ fontSize: 11, color: C.muted }}>{v.location}</div>
+      {VENUES.filter(function(v) { return v.stamps; }).map(function(v, i) {
+        return (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f5f5f5", fontSize: 12.5 }}>
+            <span>☕</span>
+            <div>
+              <div style={{ fontWeight: 500 }}>{v.name}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{v.location}</div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
