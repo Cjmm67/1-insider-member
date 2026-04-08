@@ -241,18 +241,8 @@ function SignIn({ onSuccess, onBack }) {
 
   const sendOtp = async () => {
     setError("");
-    if (!mobile || mobile.length < 8) { setError("Enter a valid mobile number"); return; }
-    setLoading(true);
-    try {
-      const m = await supaFetch(`members?mobile=eq.${encodeURIComponent(mobile)}`);
-      if (!Array.isArray(m) || m.length === 0) {
-        // Try with +65 prefix
-        const m2 = await supaFetch(`members?mobile=eq.${encodeURIComponent("+65" + mobile)}`);
-        if (!Array.isArray(m2) || m2.length === 0) { setError("Mobile number not registered. Please join 1-Insider first."); setLoading(false); return; }
-      }
-      setStep(2);
-    } catch { setError("Connection error. Please try again."); }
-    setLoading(false);
+    if (!mobile || mobile.length < 4) { setError("Enter a valid mobile number"); return; }
+    setStep(2); // Demo mode — skip validation, any number proceeds
   };
 
   const verifyOtp = async () => {
@@ -260,10 +250,12 @@ function SignIn({ onSuccess, onBack }) {
     if (otp.length < 4) { setError("Enter the 6-digit OTP"); return; }
     setLoading(true);
     try {
+      // Try exact match, then +65 prefix, then +65 with space
       let m = await supaFetch(`members?mobile=eq.${encodeURIComponent(mobile)}`);
-      if (!Array.isArray(m) || m.length === 0) {
-        m = await supaFetch(`members?mobile=eq.${encodeURIComponent("+65" + mobile)}`);
-      }
+      if (!Array.isArray(m) || m.length === 0) m = await supaFetch(`members?mobile=eq.${encodeURIComponent("+65" + mobile)}`);
+      if (!Array.isArray(m) || m.length === 0) m = await supaFetch(`members?mobile=eq.${encodeURIComponent("+65 " + mobile)}`);
+      // Demo fallback — default to Sophia Chen (M0001)
+      if (!Array.isArray(m) || m.length === 0) m = await supaFetch("members?id=eq.M0001");
       if (Array.isArray(m) && m[0]) { onSuccess(m[0]); }
       else { setError("Verification failed"); }
     } catch { setError("Connection error"); }
