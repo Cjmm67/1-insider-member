@@ -293,10 +293,10 @@ function Home({ member, transactions, setView, reload }) {
     setTimeout(() => setVoucherUsed(null), 3000);
   };
 
-  const claimNewSet = () => {
-    setVouchersUsed(0);
-    supaFetch("transactions", { method: "POST", body: { member_id: member.id, venue: "1-Insider Vouchers", amount: 0, points: 0, type: "adjust", reward_name: "Non-Stop Hits — New voucher set claimed" } });
-    supaFetch("members?id=eq." + member.id, { method: "PATCH", body: { voucher_sets_used: (member.voucher_sets_used || 0) + 1 } });
+  const claimNewSet = async () => {
+    await supaFetch("members?id=eq." + member.id, { method: "PATCH", body: { vouchers_remaining: 10, voucher_sets_used: (member.voucher_sets_used || 0) + 1 } });
+    await supaFetch("transactions", { method: "POST", body: { member_id: member.id, venue: "1-Insider Vouchers", amount: 0, points: 0, type: "adjust", reward_name: "Non-Stop Hits — New voucher set claimed" } });
+    reload();
   };
 
   return (
