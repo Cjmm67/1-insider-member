@@ -117,7 +117,7 @@ const REDEEM_TIERS = [
   { points: 250, value: 25 },
 ];
 
-const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6 };
+const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7 };
 
 const s = {
   app: { fontFamily: FONT.b, background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" },
@@ -144,18 +144,21 @@ export default function App() {
   const [rewards, setRewards] = useState([]);
   const [transactions, setTxns] = useState([]);
   const [vouchers, setVouchers] = useState([]);
+  const [giftCards, setGiftCards] = useState([]);
 
   const loadMemberData = useCallback(async (memberId) => {
-    const [m, r, t, v] = await Promise.all([
+    const [m, r, t, v, g] = await Promise.all([
       supaFetch("members?id=eq." + memberId),
       supaFetch("rewards?active=eq.true&order=id.asc"),
       supaFetch("transactions?member_id=eq." + memberId + "&order=created_at.desc&limit=20"),
       supaFetch("vouchers?member_id=eq." + memberId + "&order=issued_at.desc"),
+      supaFetch("gift_cards?purchaser_id=eq." + memberId + "&order=created_at.desc"),
     ]);
     if (Array.isArray(m) && m[0]) setMember(m[0]);
     if (Array.isArray(r)) setRewards(r);
     if (Array.isArray(t)) setTxns(t);
     if (Array.isArray(v)) setVouchers(v);
+    if (Array.isArray(g)) setGiftCards(g);
   }, []);
 
   const signOut = () => { setMember(null); setView(VIEW.LANDING); };
@@ -195,11 +198,12 @@ export default function App() {
 
       {view === VIEW.LANDING && <Landing onSignIn={() => setView(VIEW.SIGNIN)} />}
       {view === VIEW.SIGNIN && <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />}
-      {view === VIEW.HOME && member && <Home member={member} transactions={transactions} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
+      {view === VIEW.HOME && member && <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.PROFILE && member && <Profile member={member} signOut={signOut} />}
       {view === VIEW.WALLET && member && <Wallet member={member} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
+      {view === VIEW.GIFTCARDS && member && <GiftCards member={member} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
 
       {member && view >= VIEW.HOME && (
         <div style={s.bottomNav}>
@@ -351,7 +355,7 @@ function SignIn({ onSuccess, onBack }) {
   );
 }
 
-function Home({ member, transactions, vouchers, setView, reload }) {
+function Home({ member, transactions, vouchers, giftCards, setView, reload }) {
   const tier = TIER[member.tier] || TIER.silver;
   const info = TIER_INFO[member.tier] || TIER_INFO.silver;
   const isDark = ["platinum", "corporate", "staff"].includes(member.tier);
@@ -421,6 +425,30 @@ function Home({ member, transactions, vouchers, setView, reload }) {
               </div>
             </div>
             <div style={{ color: C.gold, fontSize: 18, fontWeight: 600 }}>→</div>
+          </div>
+        );
+      })()}
+
+      {/* U06: Gift Cards entry card — always visible; routes to Gift Cards view */}
+      {(() => {
+        const activeCards = (giftCards || []).filter(g => g.status === "active");
+        const totalBalance = activeCards.reduce((a, g) => a + parseFloat(g.balance || 0), 0);
+        return (
+          <div onClick={() => setView(VIEW.GIFTCARDS)} style={{
+            background: "linear-gradient(135deg,#fff,#F5F9F2)",
+            border: "1.5px solid #7B9E6B55",
+            borderRadius: 12, padding: 14, marginBottom: 14,
+            display: "flex", alignItems: "center", gap: 14,
+            cursor: "pointer", boxShadow: "0 1px 8px rgba(0,0,0,.04)",
+          }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#7B9E6B22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>💳</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600 }}>Gift Cards</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                {activeCards.length === 0 ? "Buy a gift card for yourself or a friend" : `${activeCards.length} active · $${totalBalance.toFixed(0)} balance`}
+              </div>
+            </div>
+            <div style={{ color: "#7B9E6B", fontSize: 18, fontWeight: 600 }}>→</div>
           </div>
         );
       })()}
@@ -522,6 +550,30 @@ function describeTransaction(t) {
   const name = t.reward_name || "";
   const pts = t.points || 0;
   const amt = parseFloat(t.amount || 0);
+
+  // U06: Gift card purchase (admin-free member action)
+  if (t.type === "adjust" && name.startsWith("Purchased $") && name.includes("gift card")) {
+    return {
+      icon: "💳",
+      iconBg: "#F5F9F2",
+      title: name.replace(/\s+\([^)]+\)$/, ""), // strip trailing "(1G-XXXX-XXXX)" code
+      subtitle: t.note || "Gift card purchase",
+      delta: `+$${amt.toFixed(0)}`,
+      deltaColor: "#7B9E6B",
+    };
+  }
+
+  // U06: Gift card redemption
+  if (t.type === "redeem" && name.startsWith("Gift card redemption:")) {
+    return {
+      icon: "💳",
+      iconBg: "#F5F9F2",
+      title: `Gift card redeemed`,
+      subtitle: name.replace(/^Gift card redemption:\s*/, "").replace(/\s+\([^)]+\)$/, "") + " used",
+      delta: `−$${amt.toFixed(0)}`,
+      deltaColor: "#D32F2F",
+    };
+  }
 
   // Voucher usage — "1-Insider Vouchers" venue string + amount > 0
   if (t.type === "redeem" && venue === "1-Insider Vouchers" && amt > 0) {
@@ -1392,6 +1444,421 @@ function QRRedemptionModal({ voucher, member, onClose }) {
             <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Something went wrong</h3>
             <div style={{ fontSize: 13, color: "#D32F2F", marginBottom: 20 }}>{errorMsg}</div>
             <button onClick={handleCancel} style={s.btn}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── U06: GIFT CARDS VIEW ───
+function GiftCards({ member, giftCards, setView, reload }) {
+  const [purchasing, setPurchasing] = useState(false);
+  const [showRedeemForCard, setShowRedeemForCard] = useState(null);
+
+  const activeCards = giftCards.filter(g => g.status === "active");
+  const usedCards = giftCards.filter(g => g.status !== "active");
+  const totalActiveBalance = activeCards.reduce((a, g) => a + parseFloat(g.balance || 0), 0);
+
+  return (
+    <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setView(VIEW.HOME)} style={{ background: "none", border: "none", color: C.gold, fontSize: 14, cursor: "pointer", padding: 0 }}>← Home</button>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <h2 style={s.h2}>Gift Cards</h2>
+        <div style={{ fontSize: 11, color: C.muted }}>{giftCards.length} total</div>
+      </div>
+
+      {/* Summary card */}
+      <div style={{ background: "linear-gradient(135deg,#5D7B4E,#7B9E6B)", borderRadius: 12, padding: 20, color: "#fff", marginBottom: 16 }}>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,.8)", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>✦ Active Balance</div>
+        <div style={{ fontFamily: FONT.h, fontSize: 32, fontWeight: 700 }}>${totalActiveBalance.toFixed(0)}</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 4 }}>
+          across {activeCards.length} active card{activeCards.length === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      {/* Purchase CTA */}
+      <button onClick={() => setPurchasing(true)} style={{ ...s.btn, background: "#7B9E6B", marginBottom: 20 }}>
+        + Buy Gift Card
+      </button>
+
+      {/* Active cards */}
+      <h3 style={s.h3}>Active</h3>
+      {activeCards.length === 0 ? (
+        <div style={{ ...s.card, padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
+          <div style={{ fontWeight: 500, color: C.text, marginBottom: 4 }}>No active gift cards</div>
+          <div style={{ fontSize: 11 }}>Tap &ldquo;Buy Gift Card&rdquo; above to purchase one for yourself or as a gift.</div>
+        </div>
+      ) : (
+        activeCards.map(g => <GiftCardDisplay key={g.id} card={g} onRedeem={() => setShowRedeemForCard(g)} />)
+      )}
+
+      {/* History */}
+      {usedCards.length > 0 && (
+        <>
+          <h3 style={{ ...s.h3, marginTop: 20 }}>History</h3>
+          {usedCards.map(g => <GiftCardDisplay key={g.id} card={g} onRedeem={null} />)}
+        </>
+      )}
+
+      {/* Purchase modal */}
+      {purchasing && (
+        <PurchaseGiftCardModal
+          member={member}
+          onClose={() => { setPurchasing(false); reload(); }}
+        />
+      )}
+
+      {/* Redemption modal */}
+      {showRedeemForCard && (
+        <RedeemGiftCardModal
+          card={showRedeemForCard}
+          member={member}
+          onClose={() => { setShowRedeemForCard(null); reload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── U06: Single gift card display ───
+function GiftCardDisplay({ card, onRedeem }) {
+  const isActive = card.status === "active";
+  const isRedeemed = card.status === "redeemed";
+  const balancePct = card.denomination > 0 ? (parseFloat(card.balance) / parseFloat(card.denomination)) * 100 : 0;
+
+  return (
+    <div style={{
+      background: isActive
+        ? "linear-gradient(135deg,#A7C49A,#7B9E6B)"
+        : "linear-gradient(135deg,#ccc,#aaa)",
+      borderRadius: 14, padding: 18, marginBottom: 12,
+      color: "#fff", position: "relative", overflow: "hidden",
+      boxShadow: "0 2px 12px rgba(0,0,0,.08)",
+      opacity: isActive ? 1 : 0.7,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 10, opacity: 0.8, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>1-Group Gift Card</div>
+          <div style={{ fontFamily: FONT.m, fontSize: 13, marginTop: 4, letterSpacing: 1, opacity: 0.95 }}>{card.code}</div>
+        </div>
+        <span style={{
+          fontSize: 9.5, fontWeight: 600, padding: "3px 10px", borderRadius: 8,
+          background: "rgba(255,255,255,.25)", color: "#fff",
+          textTransform: "uppercase", letterSpacing: 0.8,
+        }}>{card.status}</span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 10, opacity: 0.8, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>Balance</div>
+          <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 700 }}>${parseFloat(card.balance).toFixed(0)}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 10, opacity: 0.7 }}>of ${parseFloat(card.denomination).toFixed(0)} original</div>
+          {card.recipient && card.recipient !== "Self" && <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>To: {card.recipient}</div>}
+        </div>
+      </div>
+
+      {/* Balance bar */}
+      <div style={{ height: 5, background: "rgba(255,255,255,.2)", borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
+        <div style={{ width: `${balancePct}%`, height: "100%", background: "#fff" }} />
+      </div>
+
+      {isActive && onRedeem && (
+        <button onClick={onRedeem} style={{ width: "100%", background: "rgba(255,255,255,.2)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT.b }}>
+          Show QR to redeem
+        </button>
+      )}
+      {isRedeemed && (
+        <div style={{ fontSize: 11, opacity: 0.7, textAlign: "center", paddingTop: 4 }}>Fully redeemed</div>
+      )}
+    </div>
+  );
+}
+
+// ─── U06: Purchase gift card modal ───
+function PurchaseGiftCardModal({ member, onClose }) {
+  const [denomination, setDenomination] = useState(50);
+  const [customDenom, setCustomDenom] = useState("");
+  const [recipientMode, setRecipientMode] = useState("self"); // 'self' | 'someone'
+  const [recipientName, setRecipientName] = useState("");
+  const [phase, setPhase] = useState("picking"); // 'picking' | 'processing' | 'success' | 'error'
+  const [result, setResult] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const presets = [50, 100, 250, 500, 1000];
+  const finalDenom = customDenom ? parseFloat(customDenom) : denomination;
+
+  const purchase = async () => {
+    if (!finalDenom || finalDenom < 10) { alert("Minimum gift card value is $10"); return; }
+    if (finalDenom > 10000) { alert("Maximum gift card value is $10,000"); return; }
+    if (recipientMode === "someone" && !recipientName.trim()) { alert("Enter recipient name"); return; }
+
+    setPhase("processing");
+    try {
+      // Generate a unique gift card ID (g-prefix + timestamp suffix)
+      const gid = "g" + Date.now().toString(36).toUpperCase();
+      // Generate a readable gift card code: 1G-XXXX-XXXX
+      const codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const seg = () => Array.from({ length: 4 }, () => codeChars[Math.floor(Math.random() * codeChars.length)]).join("");
+      const code = `1G-${seg()}-${seg()}`;
+
+      const body = {
+        id: gid,
+        code,
+        denomination: finalDenom,
+        balance: finalDenom,
+        purchaser: member.name,
+        purchaser_id: member.id,
+        recipient: recipientMode === "self" ? "Self" : recipientName.trim(),
+        status: "active",
+      };
+      const r = await supaFetch("gift_cards", { method: "POST", body });
+      if (!Array.isArray(r) || !r[0]) throw new Error("Gift card creation failed");
+      const card = r[0];
+
+      // Transaction log
+      await supaFetch("transactions", {
+        method: "POST",
+        body: {
+          member_id: member.id,
+          venue: "1-Insider Rewards",
+          amount: finalDenom,
+          points: 0,
+          type: "adjust",
+          reward_name: `Purchased $${finalDenom} gift card (${code})`,
+          note: recipientMode === "self" ? null : `For ${recipientName.trim()}`,
+        },
+      });
+
+      setResult(card);
+      setPhase("success");
+    } catch (e) {
+      console.error("Purchase failed:", e);
+      setErrorMsg(e.message || "Unable to process purchase. Please try again.");
+      setPhase("error");
+    }
+  };
+
+  return (
+    <div style={s.modal} onClick={() => phase !== "processing" && onClose()}>
+      <div style={{ ...s.modalInner, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+        {phase === "picking" && (
+          <>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Buy a Gift Card</h3>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Redeemable at any 1-Group venue. Never expires.</div>
+
+            {/* Denomination */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, display: "block" }}>Amount</label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                {presets.map(p => (
+                  <label key={p} style={{
+                    border: "1.5px solid " + (!customDenom && denomination === p ? C.gold : "#ddd"),
+                    borderRadius: 8, padding: "10px 6px", cursor: "pointer", textAlign: "center",
+                    background: !customDenom && denomination === p ? "#FDF8EE" : "#fff",
+                    fontSize: 14, fontWeight: 600,
+                  }}>
+                    <input type="radio" checked={!customDenom && denomination === p} onChange={() => { setDenomination(p); setCustomDenom(""); }} style={{ display: "none" }} />
+                    ${p}
+                  </label>
+                ))}
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <input type="number" min="10" max="10000" placeholder="Or custom amount ($10–$10,000)"
+                  value={customDenom} onChange={e => setCustomDenom(e.target.value)}
+                  style={{ ...s.input, fontSize: 13 }} />
+              </div>
+            </div>
+
+            {/* Recipient */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, display: "block" }}>Recipient</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[{ id: "self", label: "For me" }, { id: "someone", label: "As a gift" }].map(r => (
+                  <label key={r.id} style={{
+                    border: "1.5px solid " + (recipientMode === r.id ? C.gold : "#ddd"),
+                    borderRadius: 8, padding: "10px 6px", cursor: "pointer", textAlign: "center",
+                    background: recipientMode === r.id ? "#FDF8EE" : "#fff",
+                    fontSize: 13, fontWeight: 500,
+                  }}>
+                    <input type="radio" checked={recipientMode === r.id} onChange={() => setRecipientMode(r.id)} style={{ display: "none" }} />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+              {recipientMode === "someone" && (
+                <input type="text" placeholder="Recipient name"
+                  value={recipientName} onChange={e => setRecipientName(e.target.value)}
+                  style={{ ...s.input, fontSize: 13, marginTop: 8 }} />
+              )}
+            </div>
+
+            <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: 10, fontSize: 10.5, color: "#5D4037", marginBottom: 14, lineHeight: 1.5 }}>
+              ⚠️ Demo mode: purchase will create a live gift card in your wallet but Stripe is not wired in. No real charge is made.
+            </div>
+
+            <button onClick={purchase} style={{ ...s.btn, background: "#7B9E6B", marginBottom: 8 }}>
+              Purchase ${finalDenom || 0} gift card
+            </button>
+            <button onClick={onClose} style={s.btnOutline}>Cancel</button>
+          </>
+        )}
+
+        {phase === "processing" && (
+          <div style={{ textAlign: "center", padding: "30px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 14, color: C.muted }}>Processing your purchase…</div>
+          </div>
+        )}
+
+        {phase === "success" && result && (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>✨</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Gift Card Created</h3>
+            <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 700, color: "#7B9E6B", marginBottom: 4 }}>${parseFloat(result.denomination).toFixed(0)}</div>
+            <div style={{ ...s.mono, fontSize: 12, color: C.muted, marginBottom: 14, letterSpacing: 1.5 }}>{result.code}</div>
+            {result.recipient !== "Self" && <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>For {result.recipient}</div>}
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>{result.recipient === "Self" ? "Added to your gift card wallet." : "You can share the code and QR with the recipient from your wallet."}</div>
+            <button onClick={onClose} style={{ ...s.btn, background: "#7B9E6B" }}>Done</button>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Purchase failed</h3>
+            <div style={{ fontSize: 13, color: "#D32F2F", marginBottom: 20 }}>{errorMsg}</div>
+            <button onClick={onClose} style={s.btn}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── U06: Redeem gift card via QR modal ───
+function RedeemGiftCardModal({ card, member, onClose }) {
+  const [redeemAmount, setRedeemAmount] = useState(Math.min(parseFloat(card.balance), 50));
+  const [phase, setPhase] = useState("picking"); // 'picking' | 'qr' | 'redeeming' | 'redeemed' | 'error'
+  const [errorMsg, setErrorMsg] = useState("");
+  const [nonce] = useState(() => Array.from({ length: 12 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join(""));
+
+  const balanceNum = parseFloat(card.balance);
+  const qrPayload = JSON.stringify({ v: 1, type: "giftcard", gid: card.id, code: card.code, bal: balanceNum, amt: redeemAmount, mid: member.id, n: nonce });
+  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=0&data=${encodeURIComponent(qrPayload)}`;
+
+  const markRedeemed = async () => {
+    const amt = parseFloat(redeemAmount);
+    if (!amt || amt <= 0) { alert("Enter a valid amount"); return; }
+    if (amt > balanceNum) { alert(`Cannot redeem $${amt} — balance is only $${balanceNum}`); return; }
+
+    setPhase("redeeming");
+    try {
+      const newBalance = balanceNum - amt;
+      const newStatus = newBalance <= 0.01 ? "redeemed" : "active";
+
+      await supaFetch(`gift_cards?id=eq.${card.id}`, {
+        method: "PATCH",
+        body: { balance: newBalance, status: newStatus },
+      });
+      await supaFetch("transactions", {
+        method: "POST",
+        body: {
+          member_id: member.id,
+          venue: "1-Insider Rewards",
+          amount: amt,
+          points: 0,
+          type: "redeem",
+          reward_name: `Gift card redemption: $${amt} (${card.code})`,
+          note: `Balance: $${newBalance.toFixed(2)} remaining · nonce ${nonce}`,
+        },
+      });
+      setPhase("redeemed");
+    } catch (e) {
+      console.error("Redemption failed:", e);
+      setErrorMsg(e.message || "Unable to mark as redeemed.");
+      setPhase("error");
+    }
+  };
+
+  return (
+    <div style={s.modal} onClick={() => phase !== "redeeming" && onClose()}>
+      <div style={{ ...s.modalInner, maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+        {phase === "picking" && (
+          <>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Redeem Gift Card</h3>
+            <div style={{ ...s.mono, fontSize: 11, color: C.muted, marginBottom: 2, letterSpacing: 1 }}>{card.code}</div>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 16 }}>Balance: <strong>${balanceNum.toFixed(2)}</strong></div>
+
+            <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Amount to redeem</label>
+            <input type="number" step="0.01" min="0.01" max={balanceNum} style={{ ...s.input, marginTop: 4, marginBottom: 16, ...s.mono, fontSize: 18, textAlign: "center" }}
+              value={redeemAmount} onChange={e => setRedeemAmount(e.target.value)} />
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+              {[10, 25, 50, 100].filter(n => n <= balanceNum).map(n => (
+                <button key={n} onClick={() => setRedeemAmount(n)} style={{ ...s.btnSm, background: "#f5f5f5", color: "#555", fontSize: 11, padding: "6px 12px" }}>${n}</button>
+              ))}
+              <button onClick={() => setRedeemAmount(balanceNum)} style={{ ...s.btnSm, background: "#f5f5f5", color: "#555", fontSize: 11, padding: "6px 12px" }}>Full ${balanceNum.toFixed(0)}</button>
+            </div>
+
+            <button onClick={() => setPhase("qr")} disabled={!redeemAmount || parseFloat(redeemAmount) <= 0 || parseFloat(redeemAmount) > balanceNum} style={{ ...s.btn, background: "#7B9E6B", marginBottom: 8, opacity: (!redeemAmount || parseFloat(redeemAmount) <= 0 || parseFloat(redeemAmount) > balanceNum) ? 0.4 : 1 }}>
+              Generate QR
+            </button>
+            <button onClick={onClose} style={s.btnOutline}>Cancel</button>
+          </>
+        )}
+
+        {phase === "qr" && (
+          <>
+            <div style={{ textAlign: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: "#7B9E6B", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>✦ Show to venue staff</div>
+              <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>${parseFloat(redeemAmount).toFixed(0)} Redemption</div>
+              <div style={{ ...s.mono, fontSize: 11, color: C.muted, marginTop: 2, letterSpacing: 1 }}>{card.code}</div>
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 16, textAlign: "center", marginBottom: 14 }}>
+              <img src={qrImgUrl} alt="Gift card QR" style={{ width: 220, height: 220, display: "block", margin: "0 auto" }}
+                onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }} />
+              <div style={{ display: "none", padding: 30, fontSize: 11, color: C.muted }}>
+                QR image failed to load. Nonce:<br />
+                <div style={{ ...s.mono, marginTop: 8, fontSize: 10, wordBreak: "break-all", background: "#f5f5f5", padding: 10, borderRadius: 6 }}>{nonce}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: C.muted, textAlign: "center", marginBottom: 14, lineHeight: 1.5 }}>
+              Staff will scan this QR. After scanning, tap &ldquo;Mark as redeemed&rdquo; to deduct ${parseFloat(redeemAmount).toFixed(0)} from your balance.
+            </div>
+            <button onClick={markRedeemed} style={{ ...s.btn, background: "#7B9E6B", marginBottom: 8 }}>Mark as redeemed (demo)</button>
+            <button onClick={() => setPhase("picking")} style={s.btnOutline}>Back</button>
+          </>
+        )}
+
+        {phase === "redeeming" && (
+          <div style={{ textAlign: "center", padding: "30px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 14 }}>Processing redemption…</div>
+          </div>
+        )}
+
+        {phase === "redeemed" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Redeemed</h3>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>${parseFloat(redeemAmount).toFixed(0)} deducted from your gift card</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Remaining balance: ${(balanceNum - parseFloat(redeemAmount)).toFixed(2)}</div>
+            <button onClick={onClose} style={{ ...s.btn, background: "#7B9E6B" }}>Done</button>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Redemption failed</h3>
+            <div style={{ fontSize: 13, color: "#D32F2F", marginBottom: 20 }}>{errorMsg}</div>
+            <button onClick={onClose} style={s.btn}>Close</button>
           </div>
         )}
       </div>
