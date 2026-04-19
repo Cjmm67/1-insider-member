@@ -439,21 +439,207 @@ function Home({ member, transactions, setView, reload }) {
         ))}
       </div>
 
-      {/* Recent Activity */}
-      <h3 style={s.h3}>Recent Activity</h3>
-      {transactions.length > 0 ? transactions.slice(0, 5).map((t, i) => (
-        <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f5f5f5", fontSize: 12 }}>
-          <div>
-            <div style={{ fontWeight: 500 }}>{t.type === "redeem" ? t.reward_name : t.venue}</div>
-            <div style={{ color: C.muted, fontSize: 11 }}>{new Date(t.created_at).toLocaleDateString()}</div>
-          </div>
-          <div style={{ fontWeight: 600, color: t.points > 0 ? "#4CAF50" : t.points < 0 ? "#D32F2F" : C.muted }}>
-            {t.points > 0 ? "+" : ""}{t.points} pts
-          </div>
-        </div>
-      )) : <div style={{ color: C.muted, fontSize: 12 }}>No activity yet</div>}
+      {/* Recent Activity (U05) */}
+      <RecentActivity transactions={transactions} />
 
       <button onClick={reload} style={{ ...s.btnOutline, marginTop: 16, fontSize: 12 }}>↻ Refresh Data</button>
+    </div>
+  );
+}
+
+// U05: describe a raw transaction row as a human-readable activity entry
+function describeTransaction(t) {
+  const venue = t.venue || "";
+  const name = t.reward_name || "";
+  const pts = t.points || 0;
+  const amt = parseFloat(t.amount || 0);
+
+  // Voucher usage — "1-Insider Vouchers" venue string + amount > 0
+  if (t.type === "redeem" && venue === "1-Insider Vouchers" && amt > 0) {
+    return {
+      icon: "🎟️",
+      iconBg: "#FDF8EE",
+      title: `Used $${amt.toFixed(2)} dining voucher`,
+      subtitle: name.includes("Non-Stop") ? "Non-Stop Hits" : "Dining voucher",
+      delta: `−$${amt.toFixed(0)}`,
+      deltaColor: "#D32F2F",
+    };
+  }
+
+  // Stamp reward claim — reward_name starts with "Stamp Reward:"
+  if (t.type === "redeem" && name.startsWith("Stamp Reward:")) {
+    const rewardLabel = name.replace(/^Stamp Reward:\s*/, "");
+    return {
+      icon: "☕",
+      iconBg: "#F7F7F7",
+      title: `Claimed: ${rewardLabel}`,
+      subtitle: "Cafe Stamp Card reward",
+      delta: "Claimed",
+      deltaColor: "#2E7D32",
+    };
+  }
+
+  // Points redemption — "1-Insider Rewards" venue + negative points
+  if (t.type === "redeem" && venue === "1-Insider Rewards" && pts < 0) {
+    return {
+      icon: "🎁",
+      iconBg: "#EDE7F6",
+      title: `Redeemed: ${name || "reward"}`,
+      subtitle: "Points reward",
+      delta: `${pts} pts`,
+      deltaColor: "#D32F2F",
+    };
+  }
+
+  // Non-Stop Hits refill adjustment
+  if (t.type === "adjust" && name.includes("Non-Stop Hits")) {
+    return {
+      icon: "🔄",
+      iconBg: "#FDF8EE",
+      title: "New voucher set claimed",
+      subtitle: "Non-Stop Hits refill",
+      delta: "+10 vouchers",
+      deltaColor: "#C5A258",
+    };
+  }
+
+  // Stamp earned/deducted
+  if (name.toLowerCase().includes("stamp") && pts === 0) {
+    const deducted = t.type === "adjust" && name.toLowerCase().includes("deduct");
+    return {
+      icon: "☕",
+      iconBg: "#F7F7F7",
+      title: deducted ? "Stamp deducted" : "Stamp earned",
+      subtitle: venue || "Wildseed Café",
+      delta: deducted ? "−1 stamp" : "+1 stamp",
+      deltaColor: deducted ? "#D32F2F" : "#2E7D32",
+    };
+  }
+
+  // Points earned — type=earn with positive points (real venue transaction)
+  if (t.type === "earn" && pts > 0) {
+    return {
+      icon: "✦",
+      iconBg: "#FDF8EE",
+      title: `Earned points at ${venue || "a 1-Group venue"}`,
+      subtitle: amt > 0 ? `$${amt.toFixed(2)} spend` : null,
+      delta: `+${pts} pts`,
+      deltaColor: "#2E7D32",
+    };
+  }
+
+  // Generic earn fallback (points = 0)
+  if (t.type === "earn") {
+    return {
+      icon: "✦",
+      iconBg: "#FDF8EE",
+      title: name || `Activity at ${venue}`,
+      subtitle: venue,
+      delta: pts !== 0 ? `${pts > 0 ? "+" : ""}${pts} pts` : null,
+      deltaColor: pts > 0 ? "#2E7D32" : "#888",
+    };
+  }
+
+  // Generic adjust fallback
+  if (t.type === "adjust") {
+    return {
+      icon: "⚙",
+      iconBg: "#F5F5F5",
+      title: name || "Account adjustment",
+      subtitle: venue,
+      delta: pts !== 0 ? `${pts > 0 ? "+" : ""}${pts} pts` : null,
+      deltaColor: pts > 0 ? "#2E7D32" : pts < 0 ? "#D32F2F" : "#888",
+    };
+  }
+
+  // Unknown fallback
+  return {
+    icon: "•",
+    iconBg: "#F5F5F5",
+    title: name || venue || "Activity",
+    subtitle: venue && name ? venue : null,
+    delta: pts !== 0 ? `${pts > 0 ? "+" : ""}${pts} pts` : null,
+    deltaColor: pts > 0 ? "#2E7D32" : pts < 0 ? "#D32F2F" : "#888",
+  };
+}
+
+// U05: friendly date formatter — "Today", "Yesterday", "17 Apr", "17 Apr 2025" for older
+function friendlyDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const dayMs = 86400000;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfDate = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfToday - startOfDate) / dayMs);
+  if (diffDays === 0) return "Today · " + d.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", hour12: true });
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString("en-SG", { day: "numeric", month: "short" });
+  return d.toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// U05: Recent Activity component
+function RecentActivity({ transactions }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleCount = expanded ? 15 : 5;
+  const visible = transactions.slice(0, visibleCount);
+  const hasMore = transactions.length > 5;
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+        <h3 style={{ ...s.h3, marginBottom: 8 }}>Recent Activity</h3>
+        {transactions.length > 0 && (
+          <div style={{ fontSize: 11, color: C.muted }}>
+            {transactions.length} entr{transactions.length === 1 ? "y" : "ies"}
+          </div>
+        )}
+      </div>
+
+      {transactions.length === 0 ? (
+        <div style={{ ...s.card, padding: 20, textAlign: "center", color: C.muted, fontSize: 12.5 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>✨</div>
+          <div style={{ fontWeight: 500, color: C.text, marginBottom: 4 }}>No activity yet</div>
+          <div style={{ fontSize: 11 }}>Points, voucher uses, and stamp rewards will appear here as they happen.</div>
+        </div>
+      ) : (
+        <>
+          <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 8px rgba(0,0,0,.04)", overflow: "hidden" }}>
+            {visible.map((t, i) => {
+              const desc = describeTransaction(t);
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < visible.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: desc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    {desc.icon}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {desc.title}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>
+                      {desc.subtitle ? `${desc.subtitle} · ${friendlyDate(t.created_at)}` : friendlyDate(t.created_at)}
+                    </div>
+                  </div>
+                  {desc.delta && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: desc.deltaColor, flexShrink: 0, whiteSpace: "nowrap" }}>
+                      {desc.delta}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {hasMore && (
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <button onClick={() => setExpanded(!expanded)} style={{ background: "none", border: "none", color: C.gold, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 6 }}>
+                {expanded ? "Show less" : `Show more (${Math.min(transactions.length, 15) - 5} more)`}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
