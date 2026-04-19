@@ -475,7 +475,7 @@ function Landing({ onSignIn }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {landingTiers.map(t => {
             const isExpanded = expandedTier === t.id;
-            const isDark = ["platinum"].includes(t.id);
+            const isDark = ["platinum", "corporate"].includes(t.id);
             const tierTheme = TIER[t.id] || TIER.silver;
             return (
               <div
