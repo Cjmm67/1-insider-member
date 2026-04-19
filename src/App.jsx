@@ -198,7 +198,32 @@ export default function App() {
       {view !== VIEW.LANDING && (
         <div style={s.header}>
           <div style={s.logo}>✦ 1-INSIDER</div>
-          {member && <div style={{ fontSize: 11, color: "#888" }}>{member.name}</div>}
+          {member && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ fontSize: 11, color: "#888" }}>{member.name}</div>
+              <button
+                onClick={signOut}
+                style={{
+                  background: "transparent",
+                  border: "1px solid #333",
+                  color: "#ccc",
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  letterSpacing: 0.5,
+                  padding: "5px 10px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontFamily: FONT.b,
+                  transition: "all .15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "#D32F2F"; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "#333"; e.currentTarget.style.color = "#ccc"; }}
+                title="Sign out"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       )}
 
