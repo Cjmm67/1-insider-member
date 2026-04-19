@@ -117,7 +117,7 @@ const REDEEM_TIERS = [
   { points: 250, value: 25 },
 ];
 
-const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7 };
+const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8 };
 
 const s = {
   app: { fontFamily: FONT.b, background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" },
@@ -146,15 +146,17 @@ export default function App() {
   const [vouchers, setVouchers] = useState([]);
   const [giftCards, setGiftCards] = useState([]);
   const [tiers, setTiers] = useState([]);
+  const [stores, setStores] = useState([]);
 
   const loadMemberData = useCallback(async (memberId) => {
-    const [m, r, t, v, g, tiersList] = await Promise.all([
+    const [m, r, t, v, g, tiersList, storesList] = await Promise.all([
       supaFetch("members?id=eq." + memberId),
       supaFetch("rewards?active=eq.true&order=id.asc"),
       supaFetch("transactions?member_id=eq." + memberId + "&order=created_at.desc&limit=20"),
       supaFetch("vouchers?member_id=eq." + memberId + "&order=issued_at.desc"),
       supaFetch("gift_cards?purchaser_id=eq." + memberId + "&order=created_at.desc"),
       supaFetch("tiers?select=*&order=annual_fee.asc"),
+      supaFetch("stores?status=eq.active&order=category.asc,name.asc"),
     ]);
     if (Array.isArray(m) && m[0]) setMember(m[0]);
     if (Array.isArray(r)) setRewards(r);
@@ -162,6 +164,7 @@ export default function App() {
     if (Array.isArray(v)) setVouchers(v);
     if (Array.isArray(g)) setGiftCards(g);
     if (Array.isArray(tiersList)) setTiers(tiersList);
+    if (Array.isArray(storesList)) setStores(storesList);
   }, []);
 
   const signOut = () => { setMember(null); setView(VIEW.LANDING); };
@@ -207,6 +210,7 @@ export default function App() {
       {view === VIEW.PROFILE && member && <Profile member={member} tiers={tiers} signOut={signOut} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.WALLET && member && <Wallet member={member} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.GIFTCARDS && member && <GiftCards member={member} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
+      {view === VIEW.EXPLORE && member && <ExploreOutlets member={member} stores={stores} setView={setView} />}
 
       {member && view >= VIEW.HOME && (
         <div style={s.bottomNav}>
@@ -456,6 +460,22 @@ function Home({ member, transactions, vouchers, giftCards, setView, reload }) {
         );
       })()}
 
+      {/* U04: Explore Outlets entry card — discover all 24 1-Group venues */}
+      <div onClick={() => setView(VIEW.EXPLORE)} style={{
+        background: "linear-gradient(135deg,#fff,#F0F4F8)",
+        border: "1.5px solid #4A7A9555",
+        borderRadius: 12, padding: 14, marginBottom: 14,
+        display: "flex", alignItems: "center", gap: 14,
+        cursor: "pointer", boxShadow: "0 1px 8px rgba(0,0,0,.04)",
+      }}>
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: "#4A7A9522", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗺️</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600 }}>Explore Outlets</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>24 venues across Restaurants, Bars, Cafés · book a table</div>
+        </div>
+        <div style={{ color: "#4A7A95", fontSize: 18, fontWeight: 600 }}>→</div>
+      </div>
+
       {/* Voucher Wallet */}
       <h3 style={s.h3}>🎟️ Dining Vouchers</h3>
       {info.vCount > 0 ? (
@@ -553,6 +573,19 @@ function describeTransaction(t) {
   const name = t.reward_name || "";
   const pts = t.points || 0;
   const amt = parseFloat(t.amount || 0);
+
+  // U12: Reservation request
+  if (t.type === "adjust" && name.startsWith("Reservation request:")) {
+    const venueName = name.replace(/^Reservation request:\s*/, "").trim();
+    return {
+      icon: "📅",
+      iconBg: "#F0F4F8",
+      title: `Reservation requested`,
+      subtitle: `${venueName}${t.note ? ` · ${t.note}` : ""}`,
+      delta: null,
+      deltaColor: "#4A7A95",
+    };
+  }
 
   // U11: Tier upgrade
   if (t.type === "adjust" && name.startsWith("Tier upgrade:")) {
@@ -1923,6 +1956,367 @@ function RedeemGiftCardModal({ card, member, onClose }) {
             <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Redemption failed</h3>
             <div style={{ fontSize: 13, color: "#D32F2F", marginBottom: 20 }}>{errorMsg}</div>
             <button onClick={onClose} style={s.btn}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── U04 + U12: EXPLORE OUTLETS + VENUE RESERVATIONS ───
+
+const CATEGORY_META = {
+  "Restaurants": { icon: "🍽️", color: "#B85C38", bg: "#FDF4EF" },
+  "Bars":        { icon: "🍸", color: "#6B4E8B", bg: "#F3EEF9" },
+  "Cafés":       { icon: "☕", color: "#7B9E6B", bg: "#F1F6EE" },
+  "Wines":       { icon: "🍷", color: "#8B2252", bg: "#FBEEF3" },
+};
+
+function ExploreOutlets({ member, stores, setView }) {
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("all");
+  const [selectedStore, setSelectedStore] = useState(null);
+
+  const cats = ["all", ...Array.from(new Set(stores.map(s => s.category)))];
+  const countBy = (cat) => cat === "all" ? stores.length : stores.filter(s => s.category === cat).length;
+
+  const searchLower = search.toLowerCase();
+  const filtered = stores.filter(s => {
+    if (catFilter !== "all" && s.category !== catFilter) return false;
+    if (!searchLower) return true;
+    return (
+      (s.name || "").toLowerCase().includes(searchLower) ||
+      (s.location || "").toLowerCase().includes(searchLower) ||
+      (s.cuisine || "").toLowerCase().includes(searchLower)
+    );
+  });
+
+  if (selectedStore) {
+    return <VenueDetail store={selectedStore} member={member} onBack={() => setSelectedStore(null)} />;
+  }
+
+  return (
+    <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setView(VIEW.HOME)} style={{ background: "none", border: "none", color: C.gold, fontSize: 14, cursor: "pointer", padding: 0 }}>← Home</button>
+      </div>
+      <h2 style={s.h2}>Explore Outlets</h2>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>{stores.length} venues across Singapore · earn points or stamps on every visit</div>
+
+      {/* Search */}
+      <div style={{ position: "relative", marginBottom: 12 }}>
+        <input
+          type="text"
+          placeholder="Search by name, location, or cuisine…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ ...s.input, paddingLeft: 36, fontSize: 13 }}
+        />
+        <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: C.muted, pointerEvents: "none" }}>🔍</div>
+        {search && (
+          <div onClick={() => setSearch("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: C.muted, cursor: "pointer", padding: 4 }}>×</div>
+        )}
+      </div>
+
+      {/* Category filter chips */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
+        {cats.map(c => {
+          const meta = CATEGORY_META[c] || {};
+          const label = c === "all" ? "All" : `${meta.icon || ""} ${c}`.trim();
+          const active = catFilter === c;
+          return (
+            <div key={c} onClick={() => setCatFilter(c)} style={{
+              padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: active ? 600 : 400,
+              background: active ? (c === "all" ? C.gold : meta.color || C.gold) : "#fff",
+              color: active ? "#fff" : C.muted,
+              cursor: "pointer", whiteSpace: "nowrap", border: "1px solid #eee",
+              flexShrink: 0,
+            }}>{label} · {countBy(c)}</div>
+          );
+        })}
+      </div>
+
+      {/* Results count */}
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+        {filtered.length === stores.length ? `Showing all ${filtered.length}` : `Showing ${filtered.length} of ${stores.length}`}
+      </div>
+
+      {/* Venue list */}
+      {filtered.length === 0 ? (
+        <div style={{ ...s.card, padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>🔎</div>
+          <div style={{ fontWeight: 500, color: C.text, marginBottom: 4 }}>No venues match your search</div>
+          <div style={{ fontSize: 11 }}>Try a different category or clear the search.</div>
+        </div>
+      ) : (
+        filtered.map(store => <VenueCard key={store.id} store={store} onClick={() => setSelectedStore(store)} />)
+      )}
+    </div>
+  );
+}
+
+// ─── Single venue card in the list ───
+function VenueCard({ store, onClick }) {
+  const meta = CATEGORY_META[store.category] || { icon: "📍", color: "#888", bg: "#fafafa" };
+  return (
+    <div onClick={onClick} style={{
+      ...s.card,
+      display: "flex", alignItems: "center", gap: 14,
+      cursor: "pointer",
+      transition: "transform .15s, box-shadow .15s",
+    }}
+      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)"; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 8px rgba(0,0,0,.04)"; }}
+    >
+      <div style={{ width: 46, height: 46, borderRadius: 10, background: meta.bg, color: meta.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{meta.icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600 }}>{store.name}</div>
+          {store.featured && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 5, background: "#FDF8EE", color: "#8B6914", fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>Featured</span>}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+          {store.cuisine && <>{store.cuisine} · </>}
+          {store.location || "Singapore"}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+          {store.points_eligible && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 5, background: "#FDF8EE", color: "#8B6914", fontWeight: 600 }}>✦ Points</span>}
+          {store.stamps_eligible && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 5, background: "#F1F6EE", color: "#5D7B4E", fontWeight: 600 }}>☕ Stamps</span>}
+        </div>
+      </div>
+      <div style={{ color: C.muted, fontSize: 18 }}>›</div>
+    </div>
+  );
+}
+
+// ─── U12: Venue detail view + booking entry ───
+function VenueDetail({ store, member, onBack }) {
+  const [booking, setBooking] = useState(false);
+  const meta = CATEGORY_META[store.category] || { icon: "📍", color: "#888", bg: "#fafafa" };
+
+  return (
+    <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: C.gold, fontSize: 14, cursor: "pointer", padding: 0 }}>← Outlets</button>
+      </div>
+
+      {/* Hero */}
+      <div style={{
+        background: `linear-gradient(135deg,${meta.color},${meta.color}CC)`,
+        borderRadius: 16, padding: 24, color: "#fff", marginBottom: 16,
+        position: "relative", overflow: "hidden",
+      }}>
+        <div style={{ fontSize: 56, marginBottom: 8 }}>{meta.icon}</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,.8)", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>{store.category}</div>
+        <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 700 }}>{store.name}</div>
+        {store.cuisine && <div style={{ fontSize: 13, opacity: 0.9, marginTop: 4 }}>{store.cuisine}</div>}
+        {store.featured && (
+          <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "#fff", fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
+            ✦ Featured
+          </div>
+        )}
+      </div>
+
+      {/* Book a table CTA */}
+      <button onClick={() => setBooking(true)} style={{ ...s.btn, background: meta.color, marginBottom: 20 }}>
+        📅 Book a Table
+      </button>
+
+      {/* Details */}
+      <h3 style={s.h3}>Details</h3>
+      <div style={s.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f5f5f5", fontSize: 12.5 }}>
+          <span style={{ color: C.muted }}>Location</span>
+          <span style={{ fontWeight: 500, textAlign: "right" }}>{store.location || "—"}</span>
+        </div>
+        {store.address && (
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f5f5f5", fontSize: 12.5 }}>
+            <span style={{ color: C.muted }}>Address</span>
+            <span style={{ fontWeight: 500, textAlign: "right", maxWidth: "60%" }}>{store.address}</span>
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f5f5f5", fontSize: 12.5 }}>
+          <span style={{ color: C.muted }}>Category</span>
+          <span style={{ fontWeight: 500 }}>{store.category}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 12.5 }}>
+          <span style={{ color: C.muted }}>Store ID</span>
+          <span style={{ ...s.mono, fontSize: 11, color: C.lmuted }}>{store.id}</span>
+        </div>
+      </div>
+
+      {/* Loyalty eligibility */}
+      <h3 style={s.h3}>Loyalty benefits here</h3>
+      <div style={s.card}>
+        {store.points_eligible ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#FDF8EE", color: "#8B6914", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✦</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Earn points</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>Points accrue on every bill at your tier&apos;s rate</div>
+            </div>
+          </div>
+        ) : null}
+        {store.stamps_eligible ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0", borderTop: store.points_eligible ? "1px solid #f5f5f5" : "none", marginTop: store.points_eligible ? 8 : 0, paddingTop: store.points_eligible ? 14 : 6 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#F1F6EE", color: "#5D7B4E", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>☕</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Earn café stamps</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>$10 = 1 stamp toward your café card</div>
+            </div>
+          </div>
+        ) : null}
+        {!store.points_eligible && !store.stamps_eligible && (
+          <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "8px 0" }}>
+            Loyalty rewards not active at this venue yet.
+          </div>
+        )}
+      </div>
+
+      {/* Booking modal */}
+      {booking && (
+        <BookingModal store={store} member={member} onClose={() => setBooking(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─── U12: Booking modal — SevenRooms style with demo fallback ───
+function BookingModal({ store, member, onClose }) {
+  const meta = CATEGORY_META[store.category] || { color: "#C5A258" };
+  const [phase, setPhase] = useState("picking"); // picking | confirming | success
+
+  // Default to tomorrow at 19:00
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const defaultDate = tomorrow.toISOString().slice(0, 10);
+
+  const [bookingDate, setBookingDate] = useState(defaultDate);
+  const [bookingTime, setBookingTime] = useState("19:00");
+  const [partySize, setPartySize] = useState(2);
+  const [specialRequests, setSpecialRequests] = useState("");
+
+  const timeSlots = ["11:30", "12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00"];
+
+  const submitBooking = async () => {
+    setPhase("confirming");
+    try {
+      // If the venue has a booking_url, we'd redirect to SevenRooms. Without it, we log a
+      // reservation as a transaction (for demo acceptance) and show confirmation.
+      if (store.booking_url) {
+        // Real path: open SevenRooms in a new tab with query params
+        const params = new URLSearchParams({ date: bookingDate, time: bookingTime, party: String(partySize) });
+        window.open(`${store.booking_url}?${params.toString()}`, "_blank", "noopener,noreferrer");
+      }
+      // Log the booking intent regardless — useful for demo + for real integration echo
+      await supaFetch("transactions", {
+        method: "POST",
+        body: {
+          member_id: member.id,
+          venue: store.name,
+          venue_id: store.id,
+          amount: 0,
+          points: 0,
+          type: "adjust",
+          reward_name: `Reservation request: ${store.name}`,
+          note: `${bookingDate} at ${bookingTime} · party of ${partySize}${specialRequests ? ` · notes: ${specialRequests}` : ""}`,
+        },
+      });
+      setPhase("success");
+    } catch (e) {
+      console.error("Booking log failed:", e);
+      setPhase("success"); // don't block the user on demo log failure
+    }
+  };
+
+  return (
+    <div style={s.modal} onClick={() => phase !== "confirming" && onClose()}>
+      <div style={{ ...s.modalInner, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+        {phase === "picking" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: meta.color, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>{store.category}</div>
+            </div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Book {store.name}</h3>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>{store.location || "Singapore"}</div>
+
+            {/* Date */}
+            <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Date</label>
+            <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} min={new Date().toISOString().slice(0, 10)} style={{ ...s.input, marginBottom: 12 }} />
+
+            {/* Time slots */}
+            <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Time</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 12 }}>
+              {timeSlots.map(t => (
+                <div key={t} onClick={() => setBookingTime(t)} style={{
+                  padding: "8px 4px", borderRadius: 6, fontSize: 11.5, textAlign: "center",
+                  border: "1px solid " + (bookingTime === t ? meta.color : "#ddd"),
+                  background: bookingTime === t ? meta.color : "#fff",
+                  color: bookingTime === t ? "#fff" : C.text,
+                  fontWeight: bookingTime === t ? 600 : 400,
+                  cursor: "pointer",
+                }}>{t}</div>
+              ))}
+            </div>
+
+            {/* Party size */}
+            <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Party size</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 4, marginBottom: 12 }}>
+              {[1,2,3,4,5,6,7,8].map(n => (
+                <div key={n} onClick={() => setPartySize(n)} style={{
+                  padding: "8px 2px", borderRadius: 6, fontSize: 12, textAlign: "center",
+                  border: "1px solid " + (partySize === n ? meta.color : "#ddd"),
+                  background: partySize === n ? meta.color : "#fff",
+                  color: partySize === n ? "#fff" : C.text,
+                  fontWeight: partySize === n ? 600 : 400,
+                  cursor: "pointer",
+                }}>{n}</div>
+              ))}
+            </div>
+
+            {/* Special requests */}
+            <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Special requests (optional)</label>
+            <textarea value={specialRequests} onChange={e => setSpecialRequests(e.target.value)} rows={2} placeholder="Dietary, occasion, seating preference…" style={{ ...s.input, marginBottom: 14, resize: "vertical", fontFamily: FONT.b }} />
+
+            {/* Demo mode notice */}
+            {!store.booking_url && (
+              <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: 10, fontSize: 10.5, color: "#5D4037", marginBottom: 14, lineHeight: 1.5 }}>
+                ⚠️ Demo mode: this venue is not yet wired into SevenRooms. Your request will be logged and reviewed by the venue team. When live, bookings will confirm instantly.
+              </div>
+            )}
+
+            <button onClick={submitBooking} style={{ ...s.btn, background: meta.color, marginBottom: 8 }}>
+              {store.booking_url ? "Continue to SevenRooms →" : "Request Reservation"}
+            </button>
+            <button onClick={onClose} style={s.btnOutline}>Cancel</button>
+          </>
+        )}
+
+        {phase === "confirming" && (
+          <div style={{ textAlign: "center", padding: "30px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 14, color: C.muted }}>Sending your request…</div>
+          </div>
+        )}
+
+        {phase === "success" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{store.booking_url ? "Opened in SevenRooms" : "Request received"}</h3>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 6 }}>
+              <strong>{store.name}</strong>
+            </div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 4 }}>
+              {new Date(bookingDate).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" })} at {bookingTime}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>
+              Party of {partySize}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>
+              {store.booking_url
+                ? "Complete your reservation in the SevenRooms tab that just opened. You'll receive confirmation via email."
+                : "The venue team will confirm your reservation within 2 hours via your registered mobile. Check Recent Activity on Home."}
+            </div>
+            <button onClick={onClose} style={{ ...s.btn, background: meta.color }}>Done</button>
           </div>
         )}
       </div>
