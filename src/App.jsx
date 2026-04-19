@@ -117,7 +117,7 @@ const REDEEM_TIERS = [
   { points: 250, value: 25 },
 ];
 
-const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5 };
+const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6 };
 
 const s = {
   app: { fontFamily: FONT.b, background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" },
@@ -143,16 +143,19 @@ export default function App() {
   const [member, setMember] = useState(null);
   const [rewards, setRewards] = useState([]);
   const [transactions, setTxns] = useState([]);
+  const [vouchers, setVouchers] = useState([]);
 
   const loadMemberData = useCallback(async (memberId) => {
-    const [m, r, t] = await Promise.all([
+    const [m, r, t, v] = await Promise.all([
       supaFetch("members?id=eq." + memberId),
       supaFetch("rewards?active=eq.true&order=id.asc"),
       supaFetch("transactions?member_id=eq." + memberId + "&order=created_at.desc&limit=20"),
+      supaFetch("vouchers?member_id=eq." + memberId + "&order=issued_at.desc"),
     ]);
     if (Array.isArray(m) && m[0]) setMember(m[0]);
     if (Array.isArray(r)) setRewards(r);
     if (Array.isArray(t)) setTxns(t);
+    if (Array.isArray(v)) setVouchers(v);
   }, []);
 
   const signOut = () => { setMember(null); setView(VIEW.LANDING); };
@@ -192,10 +195,11 @@ export default function App() {
 
       {view === VIEW.LANDING && <Landing onSignIn={() => setView(VIEW.SIGNIN)} />}
       {view === VIEW.SIGNIN && <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />}
-      {view === VIEW.HOME && member && <Home member={member} transactions={transactions} setView={setView} reload={() => loadMemberData(member.id)} />}
+      {view === VIEW.HOME && member && <Home member={member} transactions={transactions} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.PROFILE && member && <Profile member={member} signOut={signOut} />}
+      {view === VIEW.WALLET && member && <Wallet member={member} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
 
       {member && view >= VIEW.HOME && (
         <div style={s.bottomNav}>
@@ -347,7 +351,7 @@ function SignIn({ onSuccess, onBack }) {
   );
 }
 
-function Home({ member, transactions, setView, reload }) {
+function Home({ member, transactions, vouchers, setView, reload }) {
   const tier = TIER[member.tier] || TIER.silver;
   const info = TIER_INFO[member.tier] || TIER_INFO.silver;
   const isDark = ["platinum", "corporate", "staff"].includes(member.tier);
@@ -395,6 +399,31 @@ function Home({ member, transactions, setView, reload }) {
         </div>
         <div style={{ fontFamily: FONT.m, fontSize: 10, opacity: 0.5, marginTop: 12 }}>{member.id} · {info.earn}</div>
       </div>
+
+      {/* U10: Voucher Wallet entry card — shows individual vouchers (points, admin-added, etc.) */}
+      {(() => {
+        const activeIndividual = (vouchers || []).filter(v => v.status === "active" || v.status === "pending_scan");
+        if (activeIndividual.length === 0) return null;
+        const totalValue = activeIndividual.reduce((a, v) => a + parseFloat(v.value || 0), 0);
+        return (
+          <div onClick={() => setView(VIEW.WALLET)} style={{
+            background: "linear-gradient(135deg,#fff,#FAF6ED)",
+            border: "1.5px solid " + C.gold + "55",
+            borderRadius: 12, padding: 14, marginBottom: 14,
+            display: "flex", alignItems: "center", gap: 14,
+            cursor: "pointer", boxShadow: "0 1px 8px rgba(0,0,0,.04)",
+          }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: C.gold + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🎟️</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600 }}>My Voucher Wallet</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                {activeIndividual.length} individual voucher{activeIndividual.length === 1 ? "" : "s"} · ${totalValue.toFixed(0)} total · redeem by QR
+              </div>
+            </div>
+            <div style={{ color: C.gold, fontSize: 18, fontWeight: 600 }}>→</div>
+          </div>
+        );
+      })()}
 
       {/* Voucher Wallet */}
       <h3 style={s.h3}>🎟️ Dining Vouchers</h3>
@@ -496,6 +525,19 @@ function describeTransaction(t) {
 
   // Voucher usage — "1-Insider Vouchers" venue string + amount > 0
   if (t.type === "redeem" && venue === "1-Insider Vouchers" && amt > 0) {
+    // U10: distinguish QR redemptions by the "(QR redemption)" suffix in reward_name
+    if (name.includes("QR redemption")) {
+      const typeMatch = name.match(/\$(\d+(?:\.\d+)?)\s+(\w+)\s+voucher/);
+      const vType = typeMatch ? typeMatch[2] : "dining";
+      return {
+        icon: "📱",
+        iconBg: "#FDF8EE",
+        title: `Redeemed $${amt.toFixed(0)} ${vType} voucher via QR`,
+        subtitle: "QR redemption",
+        delta: `−$${amt.toFixed(0)}`,
+        deltaColor: "#D32F2F",
+      };
+    }
     return {
       icon: "🎟️",
       iconBg: "#FDF8EE",
@@ -992,6 +1034,367 @@ function StampsView({ member, reload }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── U10: WALLET VIEW ───
+function Wallet({ member, vouchers, setView, reload }) {
+  const [redeeming, setRedeeming] = useState(null); // voucher being redeemed
+  const [filter, setFilter] = useState("active"); // 'active' | 'all'
+
+  // Split into active and historical
+  const activeVouchers = vouchers.filter(v => v.status === "active");
+  const visible = filter === "active" ? activeVouchers : vouchers;
+
+  const nshValue = (TIER_INFO[member.tier] || {}).vValue || 0;
+  const nshCount = member.vouchers_remaining || 0;
+
+  // Total wallet value (active individual + NSH aggregate)
+  const individualActiveValue = activeVouchers.reduce((a, v) => a + parseFloat(v.value || 0), 0);
+  const nshTotalValue = nshCount * nshValue;
+  const totalWalletValue = individualActiveValue + nshTotalValue;
+
+  return (
+    <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setView(VIEW.HOME)} style={{ background: "none", border: "none", color: C.gold, fontSize: 14, cursor: "pointer", padding: 0 }}>← Home</button>
+      </div>
+      <h2 style={s.h2}>My Voucher Wallet</h2>
+
+      {/* Summary card */}
+      <div style={{ background: "linear-gradient(135deg," + C.dark + ",#1a180f)", borderRadius: 12, padding: 18, color: "#fff", marginBottom: 16 }}>
+        <div style={{ fontSize: 10, color: C.gold, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>Total wallet value</div>
+        <div style={{ fontFamily: FONT.h, fontSize: 32, fontWeight: 700 }}>${totalWalletValue}</div>
+        <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>
+          {activeVouchers.length} individual voucher{activeVouchers.length === 1 ? "" : "s"}
+          {nshCount > 0 && ` + ${nshCount} Non-Stop Hits × $${nshValue}`}
+        </div>
+      </div>
+
+      {/* Non-Stop Hits aggregate card (Phase 1 mechanic, still live) */}
+      {nshCount > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: "0 1px 8px rgba(0,0,0,.04)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.gold, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>✦ Non-Stop Hits</div>
+              <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 600, marginTop: 2 }}>${nshValue} Dining Vouchers</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 700, color: C.gold }}>{nshCount}</div>
+              <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>of 10 left</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted }}>
+            The Non-Stop Hits bank is managed on Home → <span style={{ color: C.gold, cursor: "pointer" }} onClick={() => setView(VIEW.HOME)}>go to Home to use</span>. Individual vouchers with QR redemption are listed below.
+          </div>
+        </div>
+      )}
+
+      {/* Filter chips */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {[{ id: "active", label: `Active (${activeVouchers.length})` }, { id: "all", label: `All (${vouchers.length})` }].map(c => (
+          <div key={c.id} onClick={() => setFilter(c.id)} style={{
+            padding: "6px 14px", borderRadius: 20, fontSize: 11.5, fontWeight: filter === c.id ? 600 : 400,
+            background: filter === c.id ? C.gold : "#fff", color: filter === c.id ? "#fff" : C.muted,
+            cursor: "pointer", whiteSpace: "nowrap", border: "1px solid #eee",
+          }}>{c.label}</div>
+        ))}
+      </div>
+
+      {/* Voucher list */}
+      {visible.length === 0 ? (
+        <div style={{ ...s.card, padding: 30, textAlign: "center", color: C.muted, fontSize: 13 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🎟️</div>
+          <div style={{ fontWeight: 500, color: C.text, marginBottom: 4 }}>No {filter === "active" ? "active" : ""} vouchers in your wallet</div>
+          <div style={{ fontSize: 11 }}>Earn vouchers by converting points on the Rewards tab, or wait for birthday and renewal auto-issues.</div>
+        </div>
+      ) : (
+        visible.map(v => <VoucherCard key={v.id} voucher={v} onRedeem={() => setRedeeming(v)} />)
+      )}
+
+      {/* QR Redemption Modal */}
+      {redeeming && (
+        <QRRedemptionModal
+          voucher={redeeming}
+          member={member}
+          onClose={() => { setRedeeming(null); reload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── U10: Individual voucher card ───
+function VoucherCard({ voucher, onRedeem }) {
+  const isActive = voucher.status === "active";
+  const isConsumed = voucher.status === "consumed";
+  const isPending = voucher.status === "pending_scan";
+
+  const typeConfig = {
+    points:   { icon: "✦", bg: "#EDE7F6", fg: "#4527A0", label: "Points voucher" },
+    dining:   { icon: "🍽️", bg: "#FDF8EE", fg: "#8B6914", label: "Dining voucher" },
+    cash:     { icon: "💵", bg: "#E8F5E9", fg: "#2E7D32", label: "Cash voucher" },
+    welcome:  { icon: "✨", bg: "#FFF8E1", fg: "#5D4037", label: "Welcome voucher" },
+    birthday: { icon: "🎂", bg: "#FCE4EC", fg: "#880E4F", label: "Birthday voucher" },
+    tactical: { icon: "🎯", bg: "#E3F2FD", fg: "#1565C0", label: "Tactical voucher" },
+  };
+  const tc = typeConfig[voucher.type] || { icon: "🎟️", bg: "#f5f5f5", fg: "#666", label: voucher.type };
+
+  const statusLabel = {
+    active: "Available",
+    consumed: "Used",
+    removed: "Removed",
+    expired: "Expired",
+    pending_scan: "Awaiting scan",
+  }[voucher.status] || voucher.status;
+
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10,
+      boxShadow: "0 1px 8px rgba(0,0,0,.04)",
+      opacity: isActive || isPending ? 1 : 0.6,
+      border: isPending ? "2px solid " + C.gold : "1px solid transparent",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: isActive || isPending ? 10 : 0 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: tc.bg, color: tc.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+          {tc.icon}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <div style={{ fontFamily: FONT.h, fontSize: 17, fontWeight: 700 }}>${parseFloat(voucher.value).toFixed(0)}</div>
+            <span style={{
+              fontSize: 9.5, fontWeight: 600, padding: "2px 8px", borderRadius: 8,
+              background: isActive ? "#E8F5E9" : isPending ? "#FFF8E1" : isConsumed ? "#E3F2FD" : "#F5F5F5",
+              color: isActive ? "#2E7D32" : isPending ? "#5D4037" : isConsumed ? "#1565C0" : "#888",
+              textTransform: "uppercase", letterSpacing: 0.8,
+            }}>{statusLabel}</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+            {tc.label}
+            {voucher.source && ` · ${(voucher.source || "").replace(/_/g, " ")}`}
+          </div>
+          <div style={{ fontSize: 10, color: C.lmuted, ...s.mono, marginTop: 3 }}>
+            #{String(voucher.id).slice(0, 8)}
+            {voucher.issued_at && ` · issued ${friendlyDate(voucher.issued_at)}`}
+          </div>
+        </div>
+      </div>
+      {(isActive || isPending) && (
+        <button onClick={onRedeem} style={{ ...s.btnSm, width: "100%", fontSize: 12 }}>
+          {isPending ? "Show QR again" : "Redeem with QR"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── U10: QR Redemption Modal with 15-min countdown ───
+function QRRedemptionModal({ voucher, member, onClose }) {
+  const PENDING_MINUTES = 15;
+  const [nonce] = useState(() => {
+    // 12-char alphanumeric nonce — demo signature. Real POS integration would verify server-side.
+    return Array.from({ length: 12 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
+  });
+  const [pendingUntil, setPendingUntil] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  const [phase, setPhase] = useState("generating"); // 'generating' | 'active' | 'redeeming' | 'redeemed' | 'expired' | 'error'
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // Lock the voucher with pending_until + nonce on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const expires = new Date(Date.now() + PENDING_MINUTES * 60 * 1000).toISOString();
+        const r = await supaFetch(`vouchers?id=eq.${voucher.id}`, {
+          method: "PATCH",
+          body: { status: "pending_scan", pending_until: expires, nonce },
+        });
+        if (Array.isArray(r) && r[0]) {
+          setPendingUntil(expires);
+          setPhase("active");
+        } else {
+          setPhase("error");
+          setErrorMsg("Could not generate QR code. Please try again.");
+        }
+      } catch (e) {
+        setPhase("error");
+        setErrorMsg("Connection error. Please try again.");
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Countdown tick
+  useEffect(() => {
+    if (phase !== "active") return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [phase]);
+
+  // Auto-expire
+  useEffect(() => {
+    if (phase !== "active" || !pendingUntil) return;
+    if (Date.now() >= new Date(pendingUntil).getTime()) {
+      setPhase("expired");
+      // Revert voucher to active state so member can try again later
+      supaFetch(`vouchers?id=eq.${voucher.id}`, {
+        method: "PATCH",
+        body: { status: "active", pending_until: null, nonce: null },
+      }).catch(() => {});
+    }
+  }, [now, phase, pendingUntil, voucher.id]);
+
+  const secondsRemaining = pendingUntil ? Math.max(0, Math.floor((new Date(pendingUntil).getTime() - now) / 1000)) : PENDING_MINUTES * 60;
+  const mins = Math.floor(secondsRemaining / 60);
+  const secs = secondsRemaining % 60;
+
+  // QR payload: encodes everything a POS scanner needs to verify
+  const qrPayload = JSON.stringify({
+    v: 1, // format version
+    vid: voucher.id,
+    mid: member.id,
+    val: voucher.value,
+    typ: voucher.type,
+    exp: pendingUntil,
+    n: nonce,
+  });
+  const qrEncoded = encodeURIComponent(qrPayload);
+  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=0&data=${qrEncoded}`;
+
+  // Mark as redeemed (demo button — simulates staff POS scan confirmation)
+  const markAsRedeemed = async () => {
+    setPhase("redeeming");
+    try {
+      const consumedAt = new Date().toISOString();
+      await supaFetch(`vouchers?id=eq.${voucher.id}`, {
+        method: "PATCH",
+        body: { status: "consumed", consumed_at: consumedAt, pending_until: null },
+      });
+      // Transaction log
+      await supaFetch("transactions", {
+        method: "POST",
+        body: {
+          member_id: member.id,
+          venue: "1-Insider Vouchers",
+          amount: parseFloat(voucher.value),
+          points: 0,
+          type: "redeem",
+          reward_name: `$${parseFloat(voucher.value).toFixed(0)} ${voucher.type} voucher (QR redemption)`,
+          note: `Voucher #${String(voucher.id).slice(0, 8)} · nonce ${nonce}`,
+        },
+      });
+      setPhase("redeemed");
+    } catch (e) {
+      setPhase("error");
+      setErrorMsg("Failed to mark as redeemed. Please try again.");
+    }
+  };
+
+  const handleCancel = async () => {
+    // If the voucher is still in pending_scan state, revert to active so it stays usable
+    if (phase === "active" || phase === "error") {
+      try {
+        await supaFetch(`vouchers?id=eq.${voucher.id}`, {
+          method: "PATCH",
+          body: { status: "active", pending_until: null, nonce: null },
+        });
+      } catch (e) { /* best-effort; fine if it fails */ }
+    }
+    onClose();
+  };
+
+  const fmtTime = (m, s) => `${m}:${String(s).padStart(2, "0")}`;
+
+  return (
+    <div style={s.modal} onClick={handleCancel}>
+      <div style={{ ...s.modalInner, maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+        {phase === "generating" && (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 14, color: C.muted }}>Generating secure QR code…</div>
+          </div>
+        )}
+
+        {phase === "active" && (
+          <>
+            <div style={{ textAlign: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: C.gold, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>✦ Show to venue staff</div>
+              <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>${parseFloat(voucher.value).toFixed(0)} Voucher</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2, textTransform: "capitalize" }}>{voucher.type} · #{String(voucher.id).slice(0, 8)}</div>
+            </div>
+
+            {/* QR code */}
+            <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 16, textAlign: "center", marginBottom: 14 }}>
+              <img
+                src={qrImgUrl}
+                alt="Voucher QR code"
+                style={{ width: 240, height: 240, display: "block", margin: "0 auto" }}
+                onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }}
+              />
+              <div style={{ display: "none", padding: 30, fontSize: 11, color: C.muted, textAlign: "center" }}>
+                QR image failed to load.<br />Show this code to staff:<br />
+                <div style={{ ...s.mono, marginTop: 8, fontSize: 10, wordBreak: "break-all", background: "#f5f5f5", padding: 10, borderRadius: 6 }}>{nonce}</div>
+              </div>
+            </div>
+
+            {/* Countdown */}
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: secondsRemaining < 60 ? "#FFEBEE" : "#FFF8E1",
+              borderRadius: 10, padding: "10px 14px", marginBottom: 14,
+            }}>
+              <div style={{ fontSize: 11, color: secondsRemaining < 60 ? "#B71C1C" : "#5D4037", fontWeight: 600 }}>
+                ⏱️ Valid for
+              </div>
+              <div style={{ ...s.mono, fontSize: 16, fontWeight: 700, color: secondsRemaining < 60 ? "#B71C1C" : "#5D4037" }}>
+                {fmtTime(mins, secs)}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 10.5, color: C.muted, textAlign: "center", marginBottom: 14, lineHeight: 1.5 }}>
+              Staff will scan this QR. Once scanned by the POS, the voucher will be marked as used and deducted from your bill. Tap &ldquo;Mark as redeemed&rdquo; only after staff confirm the scan succeeded.
+            </div>
+
+            <button onClick={markAsRedeemed} style={{ ...s.btn, marginBottom: 8 }}>Mark as redeemed (demo)</button>
+            <button onClick={handleCancel} style={s.btnOutline}>Cancel</button>
+          </>
+        )}
+
+        {phase === "redeeming" && (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 14 }}>Marking voucher as redeemed…</div>
+          </div>
+        )}
+
+        {phase === "redeemed" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 56, marginBottom: 12 }}>✅</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Voucher redeemed</h3>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>${parseFloat(voucher.value).toFixed(0)} deducted from your bill</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 20 }}>The venue has been notified. Enjoy your meal.</div>
+            <button onClick={onClose} style={s.btn}>Done</button>
+          </div>
+        )}
+
+        {phase === "expired" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏱️</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>QR expired</h3>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>The 15-minute redemption window closed. Your voucher is still active — tap &ldquo;Redeem with QR&rdquo; again to generate a new code.</div>
+            <button onClick={onClose} style={s.btn}>Done</button>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Something went wrong</h3>
+            <div style={{ fontSize: 13, color: "#D32F2F", marginBottom: 20 }}>{errorMsg}</div>
+            <button onClick={handleCancel} style={s.btn}>Close</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
