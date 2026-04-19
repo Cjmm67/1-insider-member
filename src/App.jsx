@@ -157,7 +157,7 @@ const VENUE_DIRECTORY = [
   {
     name: "1-Arden",
     url: "https://www.1-arden.sg/",
-    thumbnail: "https://www.1-arden.sg/wp-content/uploads/2024/06/W6A1020a.jpg",
+    thumbnail: "https://www.1-arden.sg/wp-content/uploads/2023/08/Arden-Drone.jpg",
     subs: [
       { name: "Sol & Luna",    url: "https://solandluna.sg/" },
       { name: "Oumi",          url: "https://www.oumi.sg/" },
@@ -168,7 +168,7 @@ const VENUE_DIRECTORY = [
   {
     name: "1-Atico",
     url: "https://1-atico.sg/",
-    thumbnail: "https://1-atico.sg/wp-content/uploads/2026/02/250703_ATICO_EDITED-355-scaled.jpg",
+    thumbnail: "https://www.flnt.sg/wp-content/uploads/2024/12/flnt-singapore.jpg",
     subs: [
       { name: "1-Atico Lounge", url: "https://1-atico.sg/atico-lounge/" },
       { name: "Fire",           url: "https://firerestaurant.sg/" },
@@ -213,7 +213,7 @@ const VENUE_DIRECTORY = [
   {
     name: "The River House",
     url: "https://www.theriverhouse.sg/",
-    thumbnail: "https://static.wixstatic.com/media/5f3417_329ad13119354efc97d706730a42f413f000.jpg",
+    thumbnail: "https://static.wixstatic.com/media/8a17f4_7d4aaedade384d4e90c6a0aa90e2d202~mv2.jpg",
     subs: [
       { name: "Mimi",   url: "https://www.mimirestaurant.sg/" },
       { name: "Zorba",  url: "https://www.zorba.sg/" },
