@@ -117,104 +117,105 @@ const REDEEM_TIERS = [
   { points: 250, value: 25 },
 ];
 
-// ─── VENUE_DIRECTORY: 1-Group venues shown in sign-in + booking dropdowns ───
-// TODO: Chris — verify and replace URLs with the real venue-specific websites.
-// Defaults all route to 1-group.sg subpaths. Alphabetical by parent venue.
+// ─── VENUE_DIRECTORY: 1-Group venues shown on Landing page ───
+// URLs audited against live 1-Group websites (April 2026).
+// Fallbacks to 1-group.sg parent pages where a dedicated site doesn't exist —
+// flagged with comments so Chris can update as individual sites launch.
 const VENUE_DIRECTORY = [
   {
     name: "1-Alfaro",
-    url: "https://www.1-group.sg/1-alfaro",
+    url: "https://1-alfaro.sg/",
     subs: [
-      { name: "La Luna",  url: "https://www.1-group.sg/la-luna" },
-      { name: "La Torre", url: "https://www.1-group.sg/la-torre" },
+      { name: "La Luna",  url: "https://1-alfaro.sg/" },
+      { name: "La Torre", url: "https://1-alfaro.sg/" },
     ],
   },
   {
     name: "1-Altitude Coast",
-    url: "https://www.1-group.sg/1-altitude-coast",
+    url: "https://1-altitudecoast.sg/",
     subs: [
-      { name: "Sol & Ora",            url: "https://www.1-group.sg/sol-ora" },
-      { name: "1-Altitude Coast Bar", url: "https://www.1-group.sg/1-altitude-coast-bar" },
+      { name: "Sol & Ora",            url: "https://solandora.sg/" },
+      { name: "1-Altitude Coast Bar", url: "https://1-altitudecoast.sg/rooftop-bar-2/" },
     ],
   },
   {
     name: "1-Altitude Melaka",
-    url: "https://www.1-group.sg/1-altitude-melaka",
+    url: "https://1-altitude.my/",
     subs: [
-      { name: "Monti",                         url: "https://www.1-group.sg/monti-melaka" },
-      { name: "Mimi",                          url: "https://www.1-group.sg/mimi-melaka" },
-      { name: "1-Altitude Bar & Sky Dining",   url: "https://www.1-group.sg/1-altitude-bar" },
-      { name: "Wildseed Cafe",                 url: "https://www.1-group.sg/wildseed-cafe-melaka" },
-      { name: "Wildseed Bistro",               url: "https://www.1-group.sg/wildseed-bistro-melaka" },
+      { name: "Monti",                         url: "https://1-altitude.my/" },
+      { name: "Mimi",                          url: "https://1-altitude.my/" },
+      { name: "1-Altitude Bar & Sky Dining",   url: "https://1-altitude.my/" },
+      { name: "Wildseed Cafe",                 url: "https://www.wildseedcafe.sg/" },
+      { name: "Wildseed Bistro",               url: "https://www.wildseedcafe.sg/" },
     ],
   },
   {
     name: "1-Arden",
-    url: "https://www.1-group.sg/1-arden",
+    url: "https://www.1-arden.sg/",
     subs: [
       { name: "Sol & Luna",    url: "https://www.1-group.sg/sol-luna" },
-      { name: "Oumi",          url: "https://www.1-group.sg/oumi" },
-      { name: "Kaarla",        url: "https://www.1-group.sg/kaarla" },
-      { name: "1-Arden Bar",   url: "https://www.1-group.sg/1-arden-bar" },
+      { name: "Oumi",          url: "https://www.oumi.sg/" },
+      { name: "Kaarla",        url: "https://kaarla.sg/" },
+      { name: "1-Arden Bar",   url: "https://www.1-arden.sg/" },
     ],
   },
   {
     name: "1-Atico",
-    url: "https://www.1-group.sg/1-atico",
+    url: "https://1-atico.sg/",
     subs: [
-      { name: "1-Atico Lounge", url: "https://www.1-group.sg/1-atico-lounge" },
-      { name: "Fire",           url: "https://www.1-group.sg/fire" },
-      { name: "Flnt",           url: "https://www.1-group.sg/flnt" },
+      { name: "1-Atico Lounge", url: "https://1-atico.sg/atico-lounge/" },
+      { name: "Fire",           url: "https://firerestaurant.sg/" },
+      { name: "Flnt",           url: "https://www.flnt.sg/" },
     ],
   },
   {
     name: "1-Flowerhill",
-    url: "https://www.1-group.sg/1-flowerhill",
+    url: "https://www.1-group.sg/1flowerhill", // TODO: swap to 1-flowerhill.sg if/when live
     subs: [
       { name: "Camille",                url: "https://www.1-group.sg/camille" },
-      { name: "Wildseed Cafe",          url: "https://www.1-group.sg/wildseed-cafe-flowerhill" },
+      { name: "Wildseed Cafe",          url: "https://www.wildseedcafe.sg/1-flowerhill/" },
       { name: "Wildseed Bar & Grill",   url: "https://www.1-group.sg/wildseed-bar-grill" },
     ],
   },
   {
     name: "Monti",
-    url: "https://www.1-group.sg/monti",
+    url: "https://www.monti.sg/",
     subs: [],
   },
   {
     name: "The Alkaff Mansion",
-    url: "https://www.1-group.sg/the-alkaff-mansion",
+    url: "https://thealkaffmansion.sg/",
     subs: [
       { name: "Una",             url: "https://www.1-group.sg/una" },
-      { name: "1918",            url: "https://www.1-group.sg/1918" },
-      { name: "Wildseed Cafe",   url: "https://www.1-group.sg/wildseed-cafe-alkaff" },
+      { name: "1918",            url: "https://www.1-group.sg/1918-heritage-bar" },
+      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/the-alkaff-mansion/" },
     ],
   },
   {
     name: "The Garage",
-    url: "https://www.1-group.sg/the-garage",
+    url: "https://www.1-group.sg/il-giardino", // no parent site found; points to main brand
     subs: [
       { name: "iL Giardino",     url: "https://www.1-group.sg/il-giardino" },
-      { name: "Wildseed Cafe",   url: "https://www.1-group.sg/wildseed-cafe-garage" },
+      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/" },
     ],
   },
   {
     name: "The River House",
-    url: "https://www.1-group.sg/the-river-house",
+    url: "https://www.theriverhouse.sg/",
     subs: [
-      { name: "Mimi",   url: "https://www.1-group.sg/mimi" },
-      { name: "Zorba",  url: "https://www.1-group.sg/zorba" },
-      { name: "Yin",    url: "https://www.1-group.sg/yin" },
-      { name: "Yang",   url: "https://www.1-group.sg/yang" },
+      { name: "Mimi",   url: "https://www.theriverhouse.sg/" },
+      { name: "Zorba",  url: "https://www.theriverhouse.sg/" },
+      { name: "Yin",    url: "https://www.yinyang.sg/yin" },
+      { name: "Yang",   url: "https://www.yinyang.sg/" },
     ],
   },
   {
     name: "The Summer House",
-    url: "https://www.1-group.sg/the-summer-house",
+    url: "https://www.thesummerhouse.sg/",
     subs: [
-      { name: "Botanico",        url: "https://www.1-group.sg/botanico" },
-      { name: "Wildseed Cafe",   url: "https://www.1-group.sg/wildseed-cafe-summer-house" },
-      { name: "Wildseed Bistro", url: "https://www.1-group.sg/wildseed-bistro-summer-house" },
+      { name: "Botanico",        url: "https://botanico.sg/" },
+      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/" },
+      { name: "Wildseed Bistro", url: "https://www.wildseedcafe.sg/" },
     ],
   },
 ];
@@ -360,11 +361,91 @@ export default function App() {
 }
 
 function Landing({ onSignIn }) {
-  const tiers = [
-    { id: "silver", name: "Silver", sub: "Free — start earning today", icon: "✧" },
-    { id: "gold", name: "Gold", sub: "$40/yr — enhanced rewards", icon: "★" },
-    { id: "platinum", name: "Platinum", sub: "$80/yr — premium experience", icon: "♦" },
+  // Rich tier data — used for the Choose Your Tier expandable cards on Landing.
+  const landingTiers = [
+    {
+      id: "silver",
+      name: "Silver",
+      sub: "Free — start earning today",
+      icon: "✧",
+      fee: "Free",
+      highlight: "Base rate, no commitment",
+      cta: "join",
+      benefits: [
+        { icon: "✦", label: "Earn rate",           value: "$1 = 1 point on every dining bill" },
+        { icon: "🎂", label: "Birthday discount",   value: "10% off your total bill, entire birthday month" },
+        { icon: "🎟️", label: "Welcome voucher",     value: "1 × $10 voucher on signup (min $20 spend)" },
+        { icon: "☕", label: "Cafe Stamp Card",     value: "Earn stamps at all 4 Wildseed Café locations" },
+        { icon: "💳", label: "Gift card access",    value: "Buy and gift 1-Group gift cards" },
+        { icon: "✨", label: "Signup bonus",        value: "100 pts (Jan), 150 pts (Feb), 200 pts + yusheng (Mar)" },
+      ],
+    },
+    {
+      id: "gold",
+      name: "Gold",
+      sub: "$40/year — enhanced rewards",
+      icon: "★",
+      fee: "$40/year",
+      highlight: "Best value for regulars",
+      cta: "join",
+      benefits: [
+        { icon: "✦", label: "Earn rate",            value: "$1 = 1.5 points — 50% more than Silver" },
+        { icon: "🎂", label: "Birthday discount",    value: "15% off your total bill, entire birthday month" },
+        { icon: "🎟️", label: "Dining vouchers",      value: "10 × $20 ($200 total value) issued annually" },
+        { icon: "🔄", label: "Non-Stop Hits",         value: "Unlimited voucher refill — new set available once you've used all 10" },
+        { icon: "📅", label: "Priority reservations", value: "Skip-the-queue booking at all 1-Group venues" },
+        { icon: "🎉", label: "Exclusive events",      value: "Member-only tasting events and chef dinners" },
+        { icon: "🥂", label: "Welcome drink",         value: "Complimentary welcome drink on every visit" },
+        { icon: "☕", label: "Cafe Stamp Card",       value: "All Silver stamp benefits included" },
+      ],
+    },
+    {
+      id: "platinum",
+      name: "Platinum",
+      sub: "$80/year — premium experience",
+      icon: "♦",
+      fee: "$80/year",
+      highlight: "For regulars who want the best",
+      cta: "join",
+      benefits: [
+        { icon: "✦",  label: "Earn rate",             value: "$1 = 2 points — double the Silver rate" },
+        { icon: "🎂", label: "Birthday discount",      value: "20% off your total bill, entire birthday month" },
+        { icon: "🎟️", label: "Dining vouchers",        value: "10 × $25 ($250 total value) issued annually" },
+        { icon: "🔄", label: "Non-Stop Hits",           value: "Unlimited voucher refill — higher denomination" },
+        { icon: "🌟", label: "VIP reservations",        value: "Guaranteed tables and best seating on request" },
+        { icon: "👤", label: "Concierge service",       value: "Dedicated concierge for special occasions" },
+        { icon: "🤝", label: "Partner benefits",        value: "Exclusive perks with 1-Group partners" },
+        { icon: "👨‍🍳", label: "Chef's table access",      value: "Priority booking for chef's table experiences" },
+        { icon: "☕", label: "Cafe Stamp Card",         value: "All Silver stamp benefits included" },
+      ],
+    },
+    {
+      id: "corporate",
+      name: "Corporate",
+      sub: "By invitation — contact us to learn more",
+      icon: "◈",
+      fee: "Bespoke",
+      highlight: "For teams, offices, and corporate clients",
+      cta: "enquire",
+      benefits: [
+        { icon: "✦",  label: "Earn rate",             value: "$1 = 1.5 points across the entire organisation" },
+        { icon: "💼", label: "Bulk gift cards",         value: "Branded, denominated gift cards for staff rewards and client gifting" },
+        { icon: "🎉", label: "Event coordination",      value: "Dedicated planner for corporate dinners, product launches, D&D" },
+        { icon: "👤", label: "Account manager",         value: "A single point of contact across all 1-Group venues" },
+        { icon: "📅", label: "Priority reservations",   value: "Same-day availability at any venue, any tier" },
+        { icon: "🎟️", label: "Voucher allocation",      value: "10 × $20 vouchers per qualifying team member" },
+        { icon: "🏢", label: "Multi-venue billing",     value: "Consolidated monthly statements across your team's dining" },
+        { icon: "✉️", label: "Custom packages",         value: "Tailored programmes for teams of any size — from 10 to 10,000" },
+      ],
+    },
   ];
+
+  // Single-expand behaviour — one tier open at a time
+  const [expandedTier, setExpandedTier] = useState(null);
+  const [showCorporateEnquiry, setShowCorporateEnquiry] = useState(false);
+
+  const toggleTier = (id) => setExpandedTier(v => (v === id ? null : id));
+
   return (
     <div style={{ animation: "fadeIn .4s ease" }}>
       <div style={{ background: "linear-gradient(135deg," + C.dark + ",#1a180f)", padding: "48px 24px", textAlign: "center" }}>
@@ -385,40 +466,239 @@ function Landing({ onSignIn }) {
         {/* Demo mode badge */}
         <div style={{ marginTop: 24, display: "inline-block", padding: "4px 12px", background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.3)", borderRadius: 10, fontSize: 10, color: "#ffc107", letterSpacing: 1, textTransform: "uppercase" }}>⚠ Preview · Demo mode</div>
       </div>
+
       <div style={{ padding: 20 }}>
+        {/* ═══ Choose Your Tier — now expandable cards with full benefits ═══ */}
         <h2 style={{ ...s.h2, textAlign: "center" }}>Choose Your Tier</h2>
+        <div style={{ fontSize: 12, color: C.muted, textAlign: "center", marginBottom: 18 }}>Tap any tier to explore full benefits</div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {tiers.map(t => (
-            <div key={t.id} style={{ background: TIER[t.id].grad, borderRadius: 16, padding: 20, color: t.id === "platinum" ? "#fff" : C.text }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700 }}>{t.icon} {t.name}</div>
-                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{t.sub}</div>
-                </div>
-                <div style={{ fontSize: 11, opacity: 0.7 }}>{TIER_INFO[t.id].earn}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <h2 style={{ ...s.h2, textAlign: "center", marginTop: 28 }}>Our Venues</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {Object.entries(CAT).map(([name, { icon, clr }]) => {
-            const count = VENUES.filter(v => v.category === name).length;
+          {landingTiers.map(t => {
+            const isExpanded = expandedTier === t.id;
+            const isDark = ["platinum"].includes(t.id);
+            const tierTheme = TIER[t.id] || TIER.silver;
             return (
-              <div key={name} style={{ background: "#fff", borderRadius: 12, padding: 16, textAlign: "center", border: "1px solid " + clr + "22", boxShadow: "0 1px 8px rgba(0,0,0,.04)" }}>
-                <div style={{ fontSize: 28, marginBottom: 6 }}>{icon}</div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: clr }}>{name}</div>
-                <div style={{ fontSize: 11, color: C.muted }}>{count} venue{count !== 1 ? "s" : ""}</div>
+              <div
+                key={t.id}
+                style={{
+                  background: tierTheme.grad,
+                  borderRadius: 16,
+                  color: isDark ? "#fff" : C.text,
+                  overflow: "hidden",
+                  boxShadow: isExpanded ? "0 8px 24px rgba(0,0,0,.1)" : "0 1px 8px rgba(0,0,0,.04)",
+                  transition: "box-shadow .2s",
+                }}
+              >
+                {/* Summary row — always visible, tap to expand */}
+                <div
+                  onClick={() => toggleTier(t.id)}
+                  style={{
+                    padding: 20, display: "flex", justifyContent: "space-between", alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>{t.icon} {t.name}</div>
+                    <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>{t.sub}</div>
+                    <div style={{ fontSize: 10.5, opacity: 0.7, marginTop: 6, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{t.highlight}</div>
+                  </div>
+                  <div style={{ textAlign: "right", marginLeft: 10 }}>
+                    <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 700 }}>{t.fee}</div>
+                    <div style={{
+                      fontSize: 18, marginTop: 6, opacity: 0.8,
+                      transition: "transform .25s",
+                      transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    }}>▾</div>
+                  </div>
+                </div>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <div style={{
+                    padding: "0 20px 20px 20px",
+                    borderTop: "1px solid " + (isDark ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.08)"),
+                  }}>
+                    <div style={{
+                      fontSize: 10.5, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600,
+                      opacity: 0.75, marginTop: 14, marginBottom: 10,
+                    }}>
+                      {t.cta === "enquire" ? "Full entitlements" : "Your benefits"}
+                    </div>
+
+                    {/* Benefits list */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {t.benefits.map((b, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 8,
+                            background: isDark ? "rgba(255,255,255,.1)" : "rgba(0,0,0,.06)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 14, flexShrink: 0,
+                          }}>{b.icon}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.9, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                              {b.label}
+                            </div>
+                            <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 2, opacity: 0.95 }}>
+                              {b.value}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* CTA */}
+                    <div style={{ marginTop: 18 }}>
+                      {t.cta === "enquire" ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowCorporateEnquiry(true); }}
+                          style={{
+                            width: "100%", background: isDark ? "#fff" : "rgba(255,255,255,.9)",
+                            color: tierTheme.txt || C.text,
+                            border: "none", padding: "12px 20px", borderRadius: 8,
+                            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT.b,
+                          }}
+                        >
+                          ✉️ Write in about Corporate Membership
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onSignIn(); }}
+                          style={{
+                            width: "100%", background: isDark ? "#fff" : "rgba(255,255,255,.9)",
+                            color: tierTheme.txt || C.text,
+                            border: "none", padding: "12px 20px", borderRadius: 8,
+                            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT.b,
+                          }}
+                        >
+                          Sign in to join {t.name} →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+
+        {/* ═══ Our Venues — replaced 4-panel grid with the VenueDirectory accordion ═══ */}
+        <h2 style={{ ...s.h2, textAlign: "center", marginTop: 32 }}>Our Venues</h2>
+        <div style={{ fontSize: 12, color: C.muted, textAlign: "center", marginBottom: 18 }}>
+          11 locations across Singapore & Malaysia · tap a venue to discover its restaurants and bars
+        </div>
+        <VenueDirectory />
 
         {/* Bottom CTA — second sign-in entry after users scan the tiers */}
         <div style={{ marginTop: 28, padding: 20, background: "#FAF8F5", borderRadius: 12, textAlign: "center" }}>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>Already a member?</div>
           <button onClick={onSignIn} style={{ ...s.btn, maxWidth: 260, margin: "0 auto", display: "block" }}>Sign in to your account</button>
         </div>
+      </div>
+
+      {/* Corporate enquiry modal */}
+      {showCorporateEnquiry && (
+        <CorporateEnquiryModal onClose={() => setShowCorporateEnquiry(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─── Corporate Membership enquiry modal ───
+function CorporateEnquiryModal({ onClose }) {
+  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    company: "",
+    email: "",
+    phone: "",
+    teamSize: "",
+    message: "",
+  });
+
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isValid = form.name.trim() && form.company.trim() && form.email.includes("@");
+
+  const submit = () => {
+    if (!isValid) return;
+    // Demo-only: log the enquiry locally. Real integration would POST to a corporate-enquiries table or Gmail MCP.
+    console.log("Corporate enquiry submitted:", form);
+    setSubmitted(true);
+  };
+
+  return (
+    <div style={s.modal} onClick={onClose}>
+      <div style={{ ...s.modalInner, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+        {!submitted ? (
+          <>
+            <div style={{ fontSize: 10, color: "#1A3A5C", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>◈ Corporate Membership</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Let&rsquo;s build a programme for your team</h3>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+              Share a few details and our Corporate team will be in touch within 2 business days.
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Your name *</label>
+                <input style={{ ...s.input, marginTop: 4 }} value={form.name} onChange={e => update("name", e.target.value)} placeholder="Jane Tan" />
+              </div>
+              <div>
+                <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Company *</label>
+                <input style={{ ...s.input, marginTop: 4 }} value={form.company} onChange={e => update("company", e.target.value)} placeholder="Acme Pte Ltd" />
+              </div>
+              <div>
+                <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Work email *</label>
+                <input style={{ ...s.input, marginTop: 4 }} type="email" value={form.email} onChange={e => update("email", e.target.value)} placeholder="jane.tan@acme.sg" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Phone</label>
+                  <input style={{ ...s.input, marginTop: 4 }} value={form.phone} onChange={e => update("phone", e.target.value)} placeholder="+65…" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Team size</label>
+                  <select style={{ ...s.input, marginTop: 4 }} value={form.teamSize} onChange={e => update("teamSize", e.target.value)}>
+                    <option value="">Choose…</option>
+                    <option>10–25</option>
+                    <option>26–50</option>
+                    <option>51–100</option>
+                    <option>101–500</option>
+                    <option>500+</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>What are you looking for?</label>
+                <textarea
+                  style={{ ...s.input, marginTop: 4, resize: "vertical", fontFamily: FONT.b }}
+                  rows={3}
+                  value={form.message}
+                  onChange={e => update("message", e.target.value)}
+                  placeholder="E.g. client gifting programme, team dining benefits, event venue access…"
+                />
+              </div>
+            </div>
+
+            <div style={{ background: "#E8EFF5", border: "1px solid #B5CADC", borderRadius: 8, padding: 10, fontSize: 10.5, color: "#1A3A5C", marginTop: 14, lineHeight: 1.5 }}>
+              ℹ️ Corporate tiers are bespoke — our team will share a tailored benefits package after a short discovery call.
+            </div>
+
+            <button onClick={submit} disabled={!isValid} style={{ ...s.btn, background: "#1A3A5C", marginTop: 14, marginBottom: 8, opacity: isValid ? 1 : 0.4 }}>
+              Submit enquiry
+            </button>
+            <button onClick={onClose} style={s.btnOutline}>Cancel</button>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>✉️</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Enquiry received</h3>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Thank you, {form.name.split(" ")[0]}.</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>
+              Our Corporate team will reach out to <strong>{form.email}</strong> within 2 business days to schedule a discovery call.
+            </div>
+            <button onClick={onClose} style={{ ...s.btn, background: "#1A3A5C" }}>Done</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -543,11 +823,7 @@ function SignIn({ onSuccess, onBack }) {
         </div>
       )}
 
-      <div style={{ marginTop: 24 }}>
-        <VenueDirectory />
-      </div>
-
-      <div style={{ textAlign: "center", marginTop: 16 }}>
+      <div style={{ textAlign: "center", marginTop: 24 }}>
         <span style={{ fontSize: 12, color: C.muted, cursor: "pointer" }} onClick={onBack}>← Back to home</span>
       </div>
 
@@ -1141,11 +1417,9 @@ function friendlyDate(iso) {
   return d.toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// ─── SHARED: Venue directory dropdown (used on SignIn and in BookingModal) ───
-function VenueDirectory({ compact = false, defaultOpen = null }) {
-  // On sign-in: default closed (defaultOpen=false). In booking modal: also closed.
-  const [open, setOpen] = useState(defaultOpen == null ? false : defaultOpen);
-  const [expandedVenue, setExpandedVenue] = useState(null); // single-expand behaviour
+// ─── SHARED: Venue directory accordion (used on Landing page Our Venues) ───
+function VenueDirectory() {
+  const [expandedVenue, setExpandedVenue] = useState(null); // single-expand parent
 
   const toggleVenue = (name) => setExpandedVenue(v => (v === name ? null : name));
 
@@ -1153,117 +1427,85 @@ function VenueDirectory({ compact = false, defaultOpen = null }) {
     <div style={{
       background: "#fff",
       border: "1px solid #eee",
-      borderRadius: 10,
+      borderRadius: 12,
       overflow: "hidden",
-      marginBottom: 12,
+      boxShadow: "0 1px 8px rgba(0,0,0,.04)",
     }}>
-      {/* Top toggle row */}
-      <div
-        onClick={() => setOpen(!open)}
-        style={{
-          padding: compact ? "10px 14px" : "13px 16px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          cursor: "pointer",
-          background: open ? "#FAF8F5" : "#fff",
-          borderBottom: open ? "1px solid #eee" : "none",
-          transition: "background .15s",
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: FONT.h, fontSize: compact ? 13 : 14, fontWeight: 600, color: C.text }}>
-            🏛️ Browse 1-Group Venues
-          </div>
-          {!compact && !open && (
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-              {VENUE_DIRECTORY.length} locations across Singapore & Malaysia · tap for venue websites
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: 14, color: C.gold, fontWeight: 600 }}>{open ? "▴" : "▾"}</div>
-      </div>
-
-      {/* Expanded list */}
-      {open && (
-        <div style={{ maxHeight: compact ? 240 : 360, overflowY: "auto" }}>
-          {VENUE_DIRECTORY.map((venue, i) => {
-            const hasSubs = venue.subs && venue.subs.length > 0;
-            const isExpanded = expandedVenue === venue.name;
-            return (
-              <div key={venue.name} style={{ borderTop: i > 0 ? "1px solid #f5f5f5" : "none" }}>
-                {/* Parent venue row */}
-                <div
-                  onClick={() => hasSubs && toggleVenue(venue.name)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: compact ? "10px 14px" : "12px 16px",
-                    cursor: hasSubs ? "pointer" : "default",
-                    background: isExpanded ? "#FAF8F5" : "#fff",
-                    transition: "background .15s",
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: compact ? 12.5 : 13.5, fontWeight: 600, color: C.text }}>
-                      {venue.name}
-                    </div>
-                    {hasSubs && (
-                      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>
-                        {venue.subs.length} sub-brand{venue.subs.length !== 1 ? "s" : ""}
-                      </div>
-                    )}
-                  </div>
-                  {hasSubs ? (
-                    <div style={{ fontSize: 14, color: C.muted, width: 20, textAlign: "center" }}>
-                      {isExpanded ? "▴" : "▾"}
-                    </div>
-                  ) : (
-                    <a
-                      href={venue.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        fontSize: 11, color: C.gold, fontWeight: 600,
-                        textDecoration: "none", padding: "3px 8px",
-                        borderRadius: 5, whiteSpace: "nowrap",
-                      }}
-                    >
-                      Visit ↗
-                    </a>
-                  )}
+      {VENUE_DIRECTORY.map((venue, i) => {
+        const hasSubs = venue.subs && venue.subs.length > 0;
+        const isExpanded = expandedVenue === venue.name;
+        return (
+          <div key={venue.name} style={{ borderTop: i > 0 ? "1px solid #f3efe9" : "none" }}>
+            {/* Parent venue row */}
+            <div
+              onClick={() => hasSubs ? toggleVenue(venue.name) : window.open(venue.url, "_blank", "noopener,noreferrer")}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "14px 16px",
+                cursor: "pointer",
+                background: isExpanded ? "#FAF8F5" : "#fff",
+                transition: "background .15s",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: C.text }}>
+                  {venue.name}
                 </div>
-
-                {/* Sub-brand drawer */}
-                {hasSubs && isExpanded && (
-                  <div style={{ background: "#FAF8F5", padding: "4px 0" }}>
-                    {venue.subs.map((sub, j) => (
-                      <a
-                        key={j}
-                        href={sub.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: compact ? "8px 14px 8px 34px" : "9px 16px 9px 36px",
-                          textDecoration: "none", color: C.text,
-                          borderTop: j > 0 ? "1px solid #f0ede6" : "none",
-                        }}
-                      >
-                        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>↳</span>
-                        <span style={{ flex: 1, fontSize: compact ? 12 : 12.5 }}>{sub.name}</span>
-                        <span style={{ fontSize: 10.5, color: C.gold, fontWeight: 600, whiteSpace: "nowrap" }}>
-                          Visit ↗
-                        </span>
-                      </a>
-                    ))}
+                {hasSubs && (
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {isExpanded ? "Tap a venue below to visit" : `Discover ${venue.subs.length} venue${venue.subs.length === 1 ? "" : "s"}`}
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
+              {hasSubs ? (
+                <div style={{
+                  fontSize: 14, color: isExpanded ? C.gold : C.muted,
+                  width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "transform .2s, color .2s",
+                  transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                }}>
+                  ▾
+                </div>
+              ) : (
+                <div style={{
+                  fontSize: 11, color: C.gold, fontWeight: 600,
+                  padding: "3px 10px", borderRadius: 6,
+                  border: "1px solid " + C.gold + "33",
+                  whiteSpace: "nowrap",
+                }}>
+                  Visit ↗
+                </div>
+              )}
+            </div>
+
+            {/* Sub-brand drawer */}
+            {hasSubs && isExpanded && (
+              <div style={{ background: "#FAF8F5", padding: "4px 0" }}>
+                {venue.subs.map((sub, j) => (
+                  <a
+                    key={j}
+                    href={sub.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "11px 16px 11px 32px",
+                      textDecoration: "none", color: C.text,
+                      borderTop: j > 0 ? "1px solid #f0ede6" : "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, width: 10 }}>↳</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{sub.name}</span>
+                    <span style={{ fontSize: 11, color: C.gold, fontWeight: 600, whiteSpace: "nowrap" }}>
+                      Visit ↗
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2996,9 +3238,6 @@ function BookingModal({ store, member, onClose }) {
                 ⚠️ Demo mode: this venue is not yet wired into SevenRooms. Your request will be logged and reviewed by the venue team. When live, bookings will confirm instantly.
               </div>
             )}
-
-            {/* Browse-all-venues dropdown (compact) — in case the member wants to switch venues */}
-            <VenueDirectory compact />
 
             <button onClick={submitBooking} style={{ ...s.btn, background: meta.color, marginBottom: 8 }}>
               {store.booking_url ? "Continue to SevenRooms →" : "Request Reservation"}
