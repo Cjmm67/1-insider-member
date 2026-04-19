@@ -808,7 +808,11 @@ function RewardsView({ member, rewards, reload }) {
 
   const cats = ["all", "cafes", "restaurants", "bars", "wines"];
   const catLabels = { all: "All", cafes: "☕ Cafés", restaurants: "🍽️ Restaurants", bars: "🍸 Bars", wines: "🍷 Wines" };
-  const filtered = rewards.filter(r => catFilter === "all" || r.category === catFilter);
+
+  // U08: split rewards by cost kind — points-earned experiences vs complimentary perks
+  const catFiltered = rewards.filter(r => catFilter === "all" || r.category === catFilter);
+  const experienceRewards = catFiltered.filter(r => (r.points_cost || 0) > 0);
+  const complimentaryPerks = catFiltered.filter(r => (r.points_cost || 0) === 0);
 
   const handleRedeem = async () => {
     if (!redeeming) return;
@@ -840,14 +844,25 @@ function RewardsView({ member, rewards, reload }) {
   return (
     <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
       <h2 style={s.h2}>Rewards</h2>
-      <div style={{ fontSize: 13, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, marginBottom: 14 }}>
         <span style={{ fontWeight: 600 }}>{(member.points || 0).toLocaleString()}</span> <span style={{ color: C.muted }}>points available</span>
       </div>
 
-      {/* U09: Now-clickable Points → Voucher card */}
+      {/* U08: Explainer card — clarifies the three reward types up front */}
+      <div style={{ background: "#FAF6ED", borderRadius: 10, padding: 12, marginBottom: 20, border: "1px solid #EDE0C1" }}>
+        <div style={{ fontSize: 10.5, color: "#8B6914", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>How rewards work</div>
+        <div style={{ fontSize: 11.5, color: "#5D4037", lineHeight: 1.6 }}>
+          <div style={{ marginBottom: 3 }}><strong>✦ Points Vouchers</strong> — convert points into cash vouchers you can use on any bill.</div>
+          <div style={{ marginBottom: 3 }}><strong>🎁 Experience Rewards</strong> — redeem points for specific experiences and treats.</div>
+          <div><strong>🌟 Complimentary Perks</strong> — free benefits included with your tier. No points required.</div>
+        </div>
+      </div>
+
+      {/* ─── SECTION 1: Points Vouchers (U09 flow) ─── */}
+      <h3 style={s.h3}>✦ Points Vouchers</h3>
       <div style={{ ...s.card, background: "linear-gradient(135deg," + C.dark + ",#1a180f)", color: "#fff", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: C.gold, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>✦ Redeem Points for Vouchers</div>
+          <div style={{ fontSize: 10.5, color: C.gold, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Convert points to cash vouchers</div>
           <div style={{ fontSize: 10, color: "#888" }}>Tap a tier</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -875,10 +890,11 @@ function RewardsView({ member, rewards, reload }) {
           })}
         </div>
         <div style={{ fontSize: 10, color: "#888", marginTop: 10, textAlign: "center" }}>
-          Points vouchers are added to your wallet and usable on your next bill
+          Vouchers appear in your wallet · redeem by QR at any venue
         </div>
       </div>
 
+      {/* Category chips (shared filter for Experience + Complimentary sections) */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto" }}>
         {cats.map(c => (
           <div key={c} onClick={() => setCatFilter(c)} style={{
@@ -889,10 +905,15 @@ function RewardsView({ member, rewards, reload }) {
         ))}
       </div>
 
-      {filtered.length > 0 ? filtered.map(r => {
+      {/* ─── SECTION 2: Experience Rewards (cost > 0) ─── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+        <h3 style={{ ...s.h3, margin: 0 }}>🎁 Experience Rewards</h3>
+        <div style={{ fontSize: 10.5, color: C.muted }}>{experienceRewards.length} available</div>
+      </div>
+      {experienceRewards.length > 0 ? experienceRewards.map(r => {
         const canAfford = (member.points || 0) >= r.points_cost;
         return (
-          <div key={r.id} style={{ ...s.card, display: "flex", justifyContent: "space-between", alignItems: "center", opacity: canAfford ? 1 : 0.5 }}>
+          <div key={r.id} style={{ ...s.card, display: "flex", justifyContent: "space-between", alignItems: "center", opacity: canAfford ? 1 : 0.55 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name}</div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{r.description}</div>
@@ -901,21 +922,46 @@ function RewardsView({ member, rewards, reload }) {
             <button disabled={!canAfford} onClick={() => setRedeeming(r)} style={{ ...s.btnSm, opacity: canAfford ? 1 : 0.4 }}>Redeem</button>
           </div>
         );
-      }) : <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 20 }}>No rewards in this category</div>}
+      }) : (
+        <div style={{ ...s.card, padding: 20, textAlign: "center", color: C.muted, fontSize: 12 }}>
+          No experience rewards in this category right now
+        </div>
+      )}
+
+      {/* ─── SECTION 3: Complimentary Perks (cost = 0) ─── */}
+      {complimentaryPerks.length > 0 && (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10, marginTop: 20 }}>
+            <h3 style={{ ...s.h3, margin: 0 }}>🌟 Complimentary Perks</h3>
+            <div style={{ fontSize: 10.5, color: C.muted }}>{complimentaryPerks.length} included</div>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Included with your {(member.tier || "").charAt(0).toUpperCase() + (member.tier || "").slice(1)} tier · no points required</div>
+          {complimentaryPerks.map(r => (
+            <div key={r.id} style={{ ...s.card, borderLeft: "3px solid #7B9E6B", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{r.description}</div>
+                <div style={{ fontSize: 11, color: "#7B9E6B", fontWeight: 600, marginTop: 4 }}>Free perk · no points needed</div>
+              </div>
+              <button onClick={() => setRedeeming(r)} style={{ ...s.btnSm, background: "#7B9E6B" }}>Claim</button>
+            </div>
+          ))}
+        </>
+      )}
 
       {/* Rewards confirmation modal */}
       {redeeming && !result && (
         <div style={s.modal} onClick={() => { setRedeeming(null); setConfirming(false); }}>
           <div style={s.modalInner} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: FONT.h, fontSize: 18, marginBottom: 12 }}>Confirm Redemption</h3>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 18, marginBottom: 12 }}>{redeeming.points_cost === 0 ? "Claim Perk" : "Confirm Redemption"}</h3>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{redeeming.name}</div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>{redeeming.description}</div>
             <div style={{ background: C.bg, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
-              <div><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Cost</div><div style={{ fontWeight: 600 }}>{redeeming.points_cost} pts</div></div>
-              <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Balance After</div><div style={{ fontWeight: 600 }}>{((member.points || 0) - redeeming.points_cost).toLocaleString()} pts</div></div>
+              <div><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Cost</div><div style={{ fontWeight: 600 }}>{redeeming.points_cost === 0 ? "Free perk" : redeeming.points_cost + " pts"}</div></div>
+              <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Balance After</div><div style={{ fontWeight: 600 }}>{((member.points || 0) - (redeeming.points_cost || 0)).toLocaleString()} pts</div></div>
             </div>
-            <button onClick={handleRedeem} disabled={confirming} style={{ ...s.btn, opacity: confirming ? 0.6 : 1, marginBottom: 8 }}>
-              {confirming ? "Redeeming…" : "Confirm"}
+            <button onClick={handleRedeem} disabled={confirming} style={{ ...s.btn, opacity: confirming ? 0.6 : 1, marginBottom: 8, background: redeeming.points_cost === 0 ? "#7B9E6B" : C.gold }}>
+              {confirming ? "Processing…" : (redeeming.points_cost === 0 ? "Claim" : "Confirm")}
             </button>
             <button onClick={() => setRedeeming(null)} style={s.btnOutline}>Cancel</button>
           </div>
