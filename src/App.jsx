@@ -119,20 +119,24 @@ const REDEEM_TIERS = [
 
 // ─── VENUE_DIRECTORY: 1-Group venues shown on Landing page ───
 // URLs audited against live 1-Group websites (April 2026).
+// Thumbnails sourced from each venue's own website — prefer exterior/building shots
+// where available, otherwise the venue's hero brand image.
 // Fallbacks to 1-group.sg parent pages where a dedicated site doesn't exist —
 // flagged with comments so Chris can update as individual sites launch.
 const VENUE_DIRECTORY = [
   {
     name: "1-Alfaro",
     url: "https://1-alfaro.sg/",
+    thumbnail: "https://1-alfaro.sg/wp-content/uploads/2025/06/250527_ALFARO_EDITED-0610Web-1.jpg",
     subs: [
-      { name: "La Luna",  url: "https://1-alfaro.sg/" },
-      { name: "La Torre", url: "https://1-alfaro.sg/" },
+      { name: "La Luna",  url: "https://laluna.sg/" },
+      { name: "La Torre", url: "https://1-alfaro.sg/la-torre/" },
     ],
   },
   {
     name: "1-Altitude Coast",
     url: "https://1-altitudecoast.sg/",
+    thumbnail: "https://1-altitudecoast.sg/wp-content/uploads/2025/08/Manifest-1AltitudeCoast-35-e1717670224707-1.jpg",
     subs: [
       { name: "Sol & Ora",            url: "https://solandora.sg/" },
       { name: "1-Altitude Coast Bar", url: "https://1-altitudecoast.sg/rooftop-bar-2/" },
@@ -141,27 +145,30 @@ const VENUE_DIRECTORY = [
   {
     name: "1-Altitude Melaka",
     url: "https://1-altitude.my/",
+    thumbnail: "https://1-altitude.my/wp-content/uploads/2023/08/1-Altitude-Rooftop-bar.jpg",
     subs: [
-      { name: "Monti",                         url: "https://1-altitude.my/" },
-      { name: "Mimi",                          url: "https://1-altitude.my/" },
-      { name: "1-Altitude Bar & Sky Dining",   url: "https://1-altitude.my/" },
-      { name: "Wildseed Cafe",                 url: "https://www.wildseedcafe.sg/" },
-      { name: "Wildseed Bistro",               url: "https://www.wildseedcafe.sg/" },
+      { name: "Monti",                         url: "https://www.monti.my/" },
+      { name: "Mimi",                          url: "https://mimirestaurant.my/" },
+      { name: "1-Altitude Bar & Sky Dining",   url: "https://1-altitude.my/rooftopbar/" },
+      { name: "Wildseed Cafe",                 url: "https://wildseed.my/" },
+      { name: "Wildseed Bistro",               url: "https://wildseed.my/" },
     ],
   },
   {
     name: "1-Arden",
     url: "https://www.1-arden.sg/",
+    thumbnail: "https://www.1-arden.sg/wp-content/uploads/2024/06/W6A1020a.jpg",
     subs: [
-      { name: "Sol & Luna",    url: "https://www.1-group.sg/sol-luna" },
+      { name: "Sol & Luna",    url: "https://solandluna.sg/" },
       { name: "Oumi",          url: "https://www.oumi.sg/" },
       { name: "Kaarla",        url: "https://kaarla.sg/" },
-      { name: "1-Arden Bar",   url: "https://www.1-arden.sg/" },
+      { name: "1-Arden Bar",   url: "https://www.1-arden.sg/1-arden-bar/" },
     ],
   },
   {
     name: "1-Atico",
     url: "https://1-atico.sg/",
+    thumbnail: "https://1-atico.sg/wp-content/uploads/2026/02/250703_ATICO_EDITED-355-scaled.jpg",
     subs: [
       { name: "1-Atico Lounge", url: "https://1-atico.sg/atico-lounge/" },
       { name: "Fire",           url: "https://firerestaurant.sg/" },
@@ -170,7 +177,8 @@ const VENUE_DIRECTORY = [
   },
   {
     name: "1-Flowerhill",
-    url: "https://www.1-group.sg/1flowerhill", // TODO: swap to 1-flowerhill.sg if/when live
+    url: "https://www.wildseedcafe.sg/1-flowerhill/", // TODO: swap to 1-flowerhill.sg if/when live
+    thumbnail: "https://www.wildseedcafe.sg/wp-content/uploads/2025/09/817-1FlowerHill-FIF-scaled-e1757058778532.jpg",
     subs: [
       { name: "Camille",                url: "https://www.1-group.sg/camille" },
       { name: "Wildseed Cafe",          url: "https://www.wildseedcafe.sg/1-flowerhill/" },
@@ -180,31 +188,35 @@ const VENUE_DIRECTORY = [
   {
     name: "Monti",
     url: "https://www.monti.sg/",
+    thumbnail: "https://www.monti.sg/wp-content/uploads/2024/10/MONTI-Exterior-in-the-Evening.jpg",
     subs: [],
   },
   {
     name: "The Alkaff Mansion",
     url: "https://thealkaffmansion.sg/",
+    thumbnail: "https://thealkaffmansion.sg/wp-content/uploads/slider/cache/f43c70e1ab3f864666cf4c0fa8bef66a/TAM-Website-Slider-1.png",
     subs: [
-      { name: "Una",             url: "https://www.1-group.sg/una" },
-      { name: "1918",            url: "https://www.1-group.sg/1918-heritage-bar" },
+      { name: "Una",             url: "https://www.una.sg/" },
+      { name: "1918",            url: "https://1918bar.sg/" },
       { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/the-alkaff-mansion/" },
     ],
   },
   {
     name: "The Garage",
-    url: "https://www.1-group.sg/il-giardino", // no parent site found; points to main brand
+    url: "https://www.wildseedcafe.sg/the-garage/",
+    thumbnail: "https://www.wildseedcafe.sg/wp-content/uploads/2025/12/R0001858-1-scaled.jpg",
     subs: [
       { name: "iL Giardino",     url: "https://www.1-group.sg/il-giardino" },
-      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/" },
+      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/the-garage/" },
     ],
   },
   {
     name: "The River House",
     url: "https://www.theriverhouse.sg/",
+    thumbnail: "https://static.wixstatic.com/media/5f3417_329ad13119354efc97d706730a42f413f000.jpg",
     subs: [
-      { name: "Mimi",   url: "https://www.theriverhouse.sg/" },
-      { name: "Zorba",  url: "https://www.theriverhouse.sg/" },
+      { name: "Mimi",   url: "https://www.mimirestaurant.sg/" },
+      { name: "Zorba",  url: "https://www.zorba.sg/" },
       { name: "Yin",    url: "https://www.yinyang.sg/yin" },
       { name: "Yang",   url: "https://www.yinyang.sg/" },
     ],
@@ -212,10 +224,11 @@ const VENUE_DIRECTORY = [
   {
     name: "The Summer House",
     url: "https://www.thesummerhouse.sg/",
+    thumbnail: "https://www.thesummerhouse.sg/wp-content/uploads/2022/03/The-Summerhouse_ext-scaled.jpg",
     subs: [
       { name: "Botanico",        url: "https://botanico.sg/" },
-      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/" },
-      { name: "Wildseed Bistro", url: "https://www.wildseedcafe.sg/" },
+      { name: "Wildseed Cafe",   url: "https://www.wildseedcafe.sg/the-summerhouse/" },
+      { name: "Wildseed Bistro", url: "https://www.thesummerhouse.sg/wildseed-bar/" },
     ],
   },
 ];
@@ -1417,70 +1430,88 @@ function friendlyDate(iso) {
   return d.toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// ─── SHARED: Venue directory accordion (used on Landing page Our Venues) ───
+// ─── SHARED: Venue directory (panels with hero thumbnails) — used on Landing ───
 function VenueDirectory() {
   const [expandedVenue, setExpandedVenue] = useState(null); // single-expand parent
 
   const toggleVenue = (name) => setExpandedVenue(v => (v === name ? null : name));
 
   return (
-    <div style={{
-      background: "#fff",
-      border: "1px solid #eee",
-      borderRadius: 12,
-      overflow: "hidden",
-      boxShadow: "0 1px 8px rgba(0,0,0,.04)",
-    }}>
-      {VENUE_DIRECTORY.map((venue, i) => {
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {VENUE_DIRECTORY.map((venue) => {
         const hasSubs = venue.subs && venue.subs.length > 0;
         const isExpanded = expandedVenue === venue.name;
         return (
-          <div key={venue.name} style={{ borderTop: i > 0 ? "1px solid #f3efe9" : "none" }}>
-            {/* Parent venue row */}
+          <div
+            key={venue.name}
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: isExpanded ? "0 8px 24px rgba(0,0,0,.08)" : "0 1px 8px rgba(0,0,0,.04)",
+              transition: "box-shadow .2s",
+              border: "1px solid #eee",
+            }}
+          >
+            {/* Hero image with venue name overlay */}
             <div
               onClick={() => hasSubs ? toggleVenue(venue.name) : window.open(venue.url, "_blank", "noopener,noreferrer")}
               style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "14px 16px",
+                position: "relative",
+                width: "100%",
+                aspectRatio: "16 / 10",
+                backgroundImage: `url("${venue.thumbnail}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundColor: C.dark, // fallback if image fails
                 cursor: "pointer",
-                background: isExpanded ? "#FAF8F5" : "#fff",
-                transition: "background .15s",
+                overflow: "hidden",
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: C.text }}>
+              {/* Dark gradient overlay for text contrast */}
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,.65) 100%)",
+              }} />
+
+              {/* Venue name + tagline */}
+              <div style={{
+                position: "absolute", left: 16, right: 16, bottom: 14,
+                color: "#fff",
+              }}>
+                <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, letterSpacing: 0.3, lineHeight: 1.15 }}>
                   {venue.name}
                 </div>
-                {hasSubs && (
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                    {isExpanded ? "Tap a venue below to visit" : `Discover ${venue.subs.length} venue${venue.subs.length === 1 ? "" : "s"}`}
+                {hasSubs ? (
+                  <div style={{ fontSize: 11.5, opacity: 0.9, marginTop: 4, letterSpacing: 0.3 }}>
+                    Discover {venue.subs.length} venue{venue.subs.length === 1 ? "" : "s"}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11.5, opacity: 0.9, marginTop: 4, letterSpacing: 0.3 }}>
+                    Tap to visit website ↗
                   </div>
                 )}
               </div>
-              {hasSubs ? (
-                <div style={{
-                  fontSize: 14, color: isExpanded ? C.gold : C.muted,
-                  width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "transform .2s, color .2s",
-                  transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                }}>
-                  ▾
-                </div>
-              ) : (
-                <div style={{
-                  fontSize: 11, color: C.gold, fontWeight: 600,
-                  padding: "3px 10px", borderRadius: 6,
-                  border: "1px solid " + C.gold + "33",
-                  whiteSpace: "nowrap",
-                }}>
-                  Visit ↗
-                </div>
-              )}
+
+              {/* Chevron / Visit badge — top right */}
+              <div style={{
+                position: "absolute", top: 12, right: 12,
+                background: "rgba(255,255,255,.92)",
+                borderRadius: 20,
+                padding: hasSubs ? "6px 10px" : "6px 12px",
+                fontSize: 11, fontWeight: 600, color: C.gold,
+                display: "flex", alignItems: "center", gap: 4,
+                boxShadow: "0 2px 6px rgba(0,0,0,.12)",
+                transition: "transform .25s",
+                transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              }}>
+                {hasSubs ? "▾" : "Visit ↗"}
+              </div>
             </div>
 
-            {/* Sub-brand drawer */}
+            {/* Sub-brand drawer (only when expanded) */}
             {hasSubs && isExpanded && (
-              <div style={{ background: "#FAF8F5", padding: "4px 0" }}>
+              <div style={{ padding: "4px 0" }}>
                 {venue.subs.map((sub, j) => (
                   <a
                     key={j}
@@ -1488,14 +1519,17 @@ function VenueDirectory() {
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      display: "flex", alignItems: "center", gap: 8,
-                      padding: "11px 16px 11px 32px",
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "13px 16px",
                       textDecoration: "none", color: C.text,
-                      borderTop: j > 0 ? "1px solid #f0ede6" : "none",
+                      borderTop: j > 0 ? "1px solid #f3efe9" : "1px solid #eee",
+                      transition: "background .12s",
                     }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#FAF8F5"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
-                    <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, width: 10 }}>↳</span>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{sub.name}</span>
+                    <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, width: 14 }}>↳</span>
+                    <span style={{ flex: 1, fontSize: 13.5, fontWeight: 500 }}>{sub.name}</span>
                     <span style={{ fontSize: 11, color: C.gold, fontWeight: 600, whiteSpace: "nowrap" }}>
                       Visit ↗
                     </span>
