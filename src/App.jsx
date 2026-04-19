@@ -213,7 +213,7 @@ const VENUE_DIRECTORY = [
   {
     name: "The River House",
     url: "https://www.theriverhouse.sg/",
-    thumbnail: "https://static.wixstatic.com/media/8a17f4_7d4aaedade384d4e90c6a0aa90e2d202~mv2.jpg",
+    thumbnail: "/venues/river-house.jpg",
     subs: [
       { name: "Mimi",   url: "https://www.mimirestaurant.sg/" },
       { name: "Zorba",  url: "https://www.zorba.sg/" },
