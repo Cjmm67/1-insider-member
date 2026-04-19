@@ -117,6 +117,108 @@ const REDEEM_TIERS = [
   { points: 250, value: 25 },
 ];
 
+// ─── VENUE_DIRECTORY: 1-Group venues shown in sign-in + booking dropdowns ───
+// TODO: Chris — verify and replace URLs with the real venue-specific websites.
+// Defaults all route to 1-group.sg subpaths. Alphabetical by parent venue.
+const VENUE_DIRECTORY = [
+  {
+    name: "1-Alfaro",
+    url: "https://www.1-group.sg/1-alfaro",
+    subs: [
+      { name: "La Luna",  url: "https://www.1-group.sg/la-luna" },
+      { name: "La Torre", url: "https://www.1-group.sg/la-torre" },
+    ],
+  },
+  {
+    name: "1-Altitude Coast",
+    url: "https://www.1-group.sg/1-altitude-coast",
+    subs: [
+      { name: "Sol & Ora",            url: "https://www.1-group.sg/sol-ora" },
+      { name: "1-Altitude Coast Bar", url: "https://www.1-group.sg/1-altitude-coast-bar" },
+    ],
+  },
+  {
+    name: "1-Altitude Melaka",
+    url: "https://www.1-group.sg/1-altitude-melaka",
+    subs: [
+      { name: "Monti",                         url: "https://www.1-group.sg/monti-melaka" },
+      { name: "Mimi",                          url: "https://www.1-group.sg/mimi-melaka" },
+      { name: "1-Altitude Bar & Sky Dining",   url: "https://www.1-group.sg/1-altitude-bar" },
+      { name: "Wildseed Cafe",                 url: "https://www.1-group.sg/wildseed-cafe-melaka" },
+      { name: "Wildseed Bistro",               url: "https://www.1-group.sg/wildseed-bistro-melaka" },
+    ],
+  },
+  {
+    name: "1-Arden",
+    url: "https://www.1-group.sg/1-arden",
+    subs: [
+      { name: "Sol & Luna",    url: "https://www.1-group.sg/sol-luna" },
+      { name: "Oumi",          url: "https://www.1-group.sg/oumi" },
+      { name: "Kaarla",        url: "https://www.1-group.sg/kaarla" },
+      { name: "1-Arden Bar",   url: "https://www.1-group.sg/1-arden-bar" },
+    ],
+  },
+  {
+    name: "1-Atico",
+    url: "https://www.1-group.sg/1-atico",
+    subs: [
+      { name: "1-Atico Lounge", url: "https://www.1-group.sg/1-atico-lounge" },
+      { name: "Fire",           url: "https://www.1-group.sg/fire" },
+      { name: "Flnt",           url: "https://www.1-group.sg/flnt" },
+    ],
+  },
+  {
+    name: "1-Flowerhill",
+    url: "https://www.1-group.sg/1-flowerhill",
+    subs: [
+      { name: "Camille",                url: "https://www.1-group.sg/camille" },
+      { name: "Wildseed Cafe",          url: "https://www.1-group.sg/wildseed-cafe-flowerhill" },
+      { name: "Wildseed Bar & Grill",   url: "https://www.1-group.sg/wildseed-bar-grill" },
+    ],
+  },
+  {
+    name: "Monti",
+    url: "https://www.1-group.sg/monti",
+    subs: [],
+  },
+  {
+    name: "The Alkaff Mansion",
+    url: "https://www.1-group.sg/the-alkaff-mansion",
+    subs: [
+      { name: "Una",             url: "https://www.1-group.sg/una" },
+      { name: "1918",            url: "https://www.1-group.sg/1918" },
+      { name: "Wildseed Cafe",   url: "https://www.1-group.sg/wildseed-cafe-alkaff" },
+    ],
+  },
+  {
+    name: "The Garage",
+    url: "https://www.1-group.sg/the-garage",
+    subs: [
+      { name: "iL Giardino",     url: "https://www.1-group.sg/il-giardino" },
+      { name: "Wildseed Cafe",   url: "https://www.1-group.sg/wildseed-cafe-garage" },
+    ],
+  },
+  {
+    name: "The River House",
+    url: "https://www.1-group.sg/the-river-house",
+    subs: [
+      { name: "Mimi",   url: "https://www.1-group.sg/mimi" },
+      { name: "Zorba",  url: "https://www.1-group.sg/zorba" },
+      { name: "Yin",    url: "https://www.1-group.sg/yin" },
+      { name: "Yang",   url: "https://www.1-group.sg/yang" },
+    ],
+  },
+  {
+    name: "The Summer House",
+    url: "https://www.1-group.sg/the-summer-house",
+    subs: [
+      { name: "Botanico",        url: "https://www.1-group.sg/botanico" },
+      { name: "Wildseed Cafe",   url: "https://www.1-group.sg/wildseed-cafe-summer-house" },
+      { name: "Wildseed Bistro", url: "https://www.1-group.sg/wildseed-bistro-summer-house" },
+    ],
+  },
+];
+
 const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8, HISTORY: 9 };
 
 const s = {
@@ -441,7 +543,11 @@ function SignIn({ onSuccess, onBack }) {
         </div>
       )}
 
-      <div style={{ textAlign: "center", marginTop: 24 }}>
+      <div style={{ marginTop: 24 }}>
+        <VenueDirectory />
+      </div>
+
+      <div style={{ textAlign: "center", marginTop: 16 }}>
         <span style={{ fontSize: 12, color: C.muted, cursor: "pointer" }} onClick={onBack}>← Back to home</span>
       </div>
 
@@ -1033,6 +1139,133 @@ function friendlyDate(iso) {
   if (diffDays < 7) return `${diffDays} days ago`;
   if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString("en-SG", { day: "numeric", month: "short" });
   return d.toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// ─── SHARED: Venue directory dropdown (used on SignIn and in BookingModal) ───
+function VenueDirectory({ compact = false, defaultOpen = null }) {
+  // On sign-in: default closed (defaultOpen=false). In booking modal: also closed.
+  const [open, setOpen] = useState(defaultOpen == null ? false : defaultOpen);
+  const [expandedVenue, setExpandedVenue] = useState(null); // single-expand behaviour
+
+  const toggleVenue = (name) => setExpandedVenue(v => (v === name ? null : name));
+
+  return (
+    <div style={{
+      background: "#fff",
+      border: "1px solid #eee",
+      borderRadius: 10,
+      overflow: "hidden",
+      marginBottom: 12,
+    }}>
+      {/* Top toggle row */}
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          padding: compact ? "10px 14px" : "13px 16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          cursor: "pointer",
+          background: open ? "#FAF8F5" : "#fff",
+          borderBottom: open ? "1px solid #eee" : "none",
+          transition: "background .15s",
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: FONT.h, fontSize: compact ? 13 : 14, fontWeight: 600, color: C.text }}>
+            🏛️ Browse 1-Group Venues
+          </div>
+          {!compact && !open && (
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              {VENUE_DIRECTORY.length} locations across Singapore & Malaysia · tap for venue websites
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: 14, color: C.gold, fontWeight: 600 }}>{open ? "▴" : "▾"}</div>
+      </div>
+
+      {/* Expanded list */}
+      {open && (
+        <div style={{ maxHeight: compact ? 240 : 360, overflowY: "auto" }}>
+          {VENUE_DIRECTORY.map((venue, i) => {
+            const hasSubs = venue.subs && venue.subs.length > 0;
+            const isExpanded = expandedVenue === venue.name;
+            return (
+              <div key={venue.name} style={{ borderTop: i > 0 ? "1px solid #f5f5f5" : "none" }}>
+                {/* Parent venue row */}
+                <div
+                  onClick={() => hasSubs && toggleVenue(venue.name)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: compact ? "10px 14px" : "12px 16px",
+                    cursor: hasSubs ? "pointer" : "default",
+                    background: isExpanded ? "#FAF8F5" : "#fff",
+                    transition: "background .15s",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: compact ? 12.5 : 13.5, fontWeight: 600, color: C.text }}>
+                      {venue.name}
+                    </div>
+                    {hasSubs && (
+                      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>
+                        {venue.subs.length} sub-brand{venue.subs.length !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+                  {hasSubs ? (
+                    <div style={{ fontSize: 14, color: C.muted, width: 20, textAlign: "center" }}>
+                      {isExpanded ? "▴" : "▾"}
+                    </div>
+                  ) : (
+                    <a
+                      href={venue.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        fontSize: 11, color: C.gold, fontWeight: 600,
+                        textDecoration: "none", padding: "3px 8px",
+                        borderRadius: 5, whiteSpace: "nowrap",
+                      }}
+                    >
+                      Visit ↗
+                    </a>
+                  )}
+                </div>
+
+                {/* Sub-brand drawer */}
+                {hasSubs && isExpanded && (
+                  <div style={{ background: "#FAF8F5", padding: "4px 0" }}>
+                    {venue.subs.map((sub, j) => (
+                      <a
+                        key={j}
+                        href={sub.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: compact ? "8px 14px 8px 34px" : "9px 16px 9px 36px",
+                          textDecoration: "none", color: C.text,
+                          borderTop: j > 0 ? "1px solid #f0ede6" : "none",
+                        }}
+                      >
+                        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>↳</span>
+                        <span style={{ flex: 1, fontSize: compact ? 12 : 12.5 }}>{sub.name}</span>
+                        <span style={{ fontSize: 10.5, color: C.gold, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          Visit ↗
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // U05: Recent Activity component
@@ -2763,6 +2996,9 @@ function BookingModal({ store, member, onClose }) {
                 ⚠️ Demo mode: this venue is not yet wired into SevenRooms. Your request will be logged and reviewed by the venue team. When live, bookings will confirm instantly.
               </div>
             )}
+
+            {/* Browse-all-venues dropdown (compact) — in case the member wants to switch venues */}
+            <VenueDirectory compact />
 
             <button onClick={submitBooking} style={{ ...s.btn, background: meta.color, marginBottom: 8 }}>
               {store.booking_url ? "Continue to SevenRooms →" : "Request Reservation"}
