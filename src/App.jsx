@@ -162,11 +162,12 @@ export default function App() {
           {[
             { icon: "🏠", label: "Home", v: VIEW.HOME },
             { icon: "🎁", label: "Rewards", v: VIEW.REWARDS },
-            { icon: "☕", label: "Stamps", v: VIEW.STAMPS },
+            { icon: "☕", label: "Cafe Stamp Card", v: VIEW.STAMPS },
             { icon: "👤", label: "Profile", v: VIEW.PROFILE },
           ].map((n, i) => (
-            <div key={i} style={s.navItem(view === n.v)} onClick={() => setView(n.v)}>
-              <span style={{ fontSize: 20 }}>{n.icon}</span>{n.label}
+            <div key={i} style={{ ...s.navItem(view === n.v), flex: 1, textAlign: "center", padding: "0 2px" }} onClick={() => setView(n.v)}>
+              <span style={{ fontSize: 20 }}>{n.icon}</span>
+              <span style={{ lineHeight: 1.1 }}>{n.label}</span>
             </div>
           ))}
         </div>
@@ -186,9 +187,20 @@ function Landing({ onSignIn }) {
       <div style={{ background: "linear-gradient(135deg," + C.dark + ",#1a180f)", padding: "48px 24px", textAlign: "center" }}>
         <div style={{ fontFamily: FONT.h, fontSize: 12, color: C.gold, letterSpacing: 3, textTransform: "uppercase", marginBottom: 12 }}>✦ 1-GROUP SINGAPORE</div>
         <h1 style={{ fontFamily: FONT.h, fontSize: 32, color: "#fff", fontWeight: 700, marginBottom: 12 }}>1-Insider</h1>
-        <p style={{ fontSize: 14, color: "#aaa", maxWidth: 300, margin: "0 auto 24px", lineHeight: 1.5 }}>Your passport to 25 premium dining destinations across Singapore</p>
-        <button onClick={onSignIn} style={{ ...s.btn, maxWidth: 260, margin: "0 auto", display: "block" }}>Sign In</button>
-        <div style={{ marginTop: 12, fontSize: 12, color: "#666" }}>Not a member? <span style={{ color: C.gold, cursor: "pointer" }}>Join Now</span></div>
+        <p style={{ fontSize: 14, color: "#ccc", maxWidth: 320, margin: "0 auto 20px", lineHeight: 1.55 }}>Earn points on every meal. Unlock member-only rates. 25 premium dining destinations across Singapore.</p>
+
+        {/* Value-prop bullets */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 14, marginBottom: 24, flexWrap: "wrap", color: "#aaa", fontSize: 11 }}>
+          <span>✦ Up to 2× points</span>
+          <span>✦ Birthday rewards</span>
+          <span>✦ Non-Stop Hits</span>
+        </div>
+
+        <button onClick={onSignIn} style={{ ...s.btn, maxWidth: 260, margin: "0 auto 10px", display: "block" }}>Sign In</button>
+        <div style={{ fontSize: 12, color: "#888" }}>New to 1-Insider? <span style={{ color: C.gold }}>Explore tiers below ↓</span></div>
+
+        {/* Demo mode badge */}
+        <div style={{ marginTop: 24, display: "inline-block", padding: "4px 12px", background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.3)", borderRadius: 10, fontSize: 10, color: "#ffc107", letterSpacing: 1, textTransform: "uppercase" }}>⚠ Preview · Demo mode</div>
       </div>
       <div style={{ padding: 20 }}>
         <h2 style={{ ...s.h2, textAlign: "center" }}>Choose Your Tier</h2>
@@ -217,6 +229,12 @@ function Landing({ onSignIn }) {
               </div>
             );
           })}
+        </div>
+
+        {/* Bottom CTA — second sign-in entry after users scan the tiers */}
+        <div style={{ marginTop: 28, padding: 20, background: "#FAF8F5", borderRadius: 12, textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>Already a member?</div>
+          <button onClick={onSignIn} style={{ ...s.btn, maxWidth: 260, margin: "0 auto", display: "block" }}>Sign in to your account</button>
         </div>
       </div>
     </div>
@@ -255,7 +273,8 @@ function SignIn({ onSuccess, onBack }) {
     <div style={{ padding: 24, paddingTop: 60, animation: "fadeIn .3s ease" }}>
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <div style={{ fontFamily: FONT.h, fontSize: 12, color: C.gold, letterSpacing: 3, textTransform: "uppercase", marginBottom: 8 }}>✦ 1-INSIDER</div>
-        <h2 style={{ fontFamily: FONT.h, fontSize: 24, fontWeight: 700 }}>Welcome Back</h2>
+        <h2 style={{ fontFamily: FONT.h, fontSize: 24, fontWeight: 700 }}>Sign in to continue</h2>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Enter your mobile number to receive a one-time passcode</div>
       </div>
       {step === 1 ? (
         <div>
@@ -326,7 +345,7 @@ function Home({ member, transactions, setView, reload }) {
           {[
             { l: "Points", v: (member.points || 0).toLocaleString() },
             { l: "Visits", v: member.visits || 0 },
-            { l: "Stamps", v: (member.stamps || 0) + "/10" },
+            { l: "Cafe Stamps", v: (member.stamps || 0) + "/10" },
           ].map((k, i) => (
             <div key={i} style={{ background: "rgba(255,255,255,.15)", borderRadius: 10, padding: 10, textAlign: "center" }}>
               <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }}>{k.l}</div>
@@ -409,20 +428,6 @@ function Home({ member, transactions, setView, reload }) {
           </div>
         </div>
       )}
-
-      {/* Quick Actions */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8, marginBottom: 20 }}>
-        {[
-          { icon: "🎁", label: "Rewards", v: VIEW.REWARDS },
-          { icon: "☕", label: "Stamps", v: VIEW.STAMPS },
-          { icon: "👤", label: "Profile", v: VIEW.PROFILE },
-        ].map((a, i) => (
-          <div key={i} onClick={() => setView(a.v)} style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", cursor: "pointer", boxShadow: "0 1px 8px rgba(0,0,0,.04)" }}>
-            <div style={{ fontSize: 24, marginBottom: 4 }}>{a.icon}</div>
-            <div style={{ fontSize: 11, fontWeight: 600 }}>{a.label}</div>
-          </div>
-        ))}
-      </div>
 
       {/* Benefits */}
       <h3 style={s.h3}>Your Benefits</h3>
@@ -573,7 +578,7 @@ function StampsView({ member, reload }) {
 
   return (
     <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
-      <h2 style={s.h2}>Café Stamps</h2>
+      <h2 style={s.h2}>Cafe Stamp Card</h2>
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>Earn 1 stamp per $10 spent at Wildseed Café outlets</div>
       <div style={{ fontSize: 12, color: C.text, marginBottom: 20, lineHeight: 1.6 }}>
         Redeeming a reward <strong>burns</strong> that number of stamps. For example: 5 stamps → claim 3-stamp reward → 2 stamps remain → earn 3 more to reach the next reward.
