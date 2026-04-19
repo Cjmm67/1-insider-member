@@ -117,7 +117,7 @@ const REDEEM_TIERS = [
   { points: 250, value: 25 },
 ];
 
-const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8 };
+const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8, HISTORY: 9 };
 
 const s = {
   app: { fontFamily: FONT.b, background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" },
@@ -211,6 +211,7 @@ export default function App() {
       {view === VIEW.WALLET && member && <Wallet member={member} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.GIFTCARDS && member && <GiftCards member={member} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.EXPLORE && member && <ExploreOutlets member={member} stores={stores} setView={setView} />}
+      {view === VIEW.HISTORY && member && <HistoryView member={member} setView={setView} />}
 
       {member && view >= VIEW.HOME && (
         <div style={s.bottomNav}>
@@ -560,7 +561,7 @@ function Home({ member, transactions, vouchers, giftCards, setView, reload }) {
       </div>
 
       {/* Recent Activity (U05) */}
-      <RecentActivity transactions={transactions} />
+      <RecentActivity transactions={transactions} setView={setView} />
 
       <button onClick={reload} style={{ ...s.btnOutline, marginTop: 16, fontSize: 12 }}>↻ Refresh Data</button>
     </div>
@@ -568,6 +569,8 @@ function Home({ member, transactions, vouchers, giftCards, setView, reload }) {
 }
 
 // U05: describe a raw transaction row as a human-readable activity entry
+// U07: every return includes a `category` ('dining' | 'points' | 'rewards' | 'account')
+//      used by the History timeline view to filter.
 function describeTransaction(t) {
   const venue = t.venue || "";
   const name = t.reward_name || "";
@@ -584,6 +587,7 @@ function describeTransaction(t) {
       subtitle: `${venueName}${t.note ? ` · ${t.note}` : ""}`,
       delta: null,
       deltaColor: "#4A7A95",
+      category: "dining",
     };
   }
 
@@ -599,6 +603,7 @@ function describeTransaction(t) {
       subtitle: from ? `from ${from}` : "Tier upgrade",
       delta: amt > 0 ? `$${amt.toFixed(0)}/yr` : null,
       deltaColor: "#C5A258",
+      category: "account",
     };
   }
 
@@ -611,6 +616,7 @@ function describeTransaction(t) {
       subtitle: t.note || "Gift card purchase",
       delta: `+$${amt.toFixed(0)}`,
       deltaColor: "#7B9E6B",
+      category: "rewards",
     };
   }
 
@@ -623,6 +629,7 @@ function describeTransaction(t) {
       subtitle: name.replace(/^Gift card redemption:\s*/, "").replace(/\s+\([^)]+\)$/, "") + " used",
       delta: `−$${amt.toFixed(0)}`,
       deltaColor: "#D32F2F",
+      category: "dining",
     };
   }
 
@@ -639,6 +646,7 @@ function describeTransaction(t) {
         subtitle: "QR redemption",
         delta: `−$${amt.toFixed(0)}`,
         deltaColor: "#D32F2F",
+        category: "dining",
       };
     }
     return {
@@ -648,6 +656,7 @@ function describeTransaction(t) {
       subtitle: name.includes("Non-Stop") ? "Non-Stop Hits" : "Dining voucher",
       delta: `−$${amt.toFixed(0)}`,
       deltaColor: "#D32F2F",
+      category: "dining",
     };
   }
 
@@ -661,6 +670,7 @@ function describeTransaction(t) {
       subtitle: "Cafe Stamp Card reward",
       delta: "Claimed",
       deltaColor: "#2E7D32",
+      category: "rewards",
     };
   }
 
@@ -673,6 +683,7 @@ function describeTransaction(t) {
       subtitle: "Points reward",
       delta: `${pts} pts`,
       deltaColor: "#D32F2F",
+      category: "points",
     };
   }
 
@@ -685,6 +696,7 @@ function describeTransaction(t) {
       subtitle: "Non-Stop Hits refill",
       delta: "+10 vouchers",
       deltaColor: "#C5A258",
+      category: "rewards",
     };
   }
 
@@ -698,6 +710,7 @@ function describeTransaction(t) {
       subtitle: venue || "Wildseed Café",
       delta: deducted ? "−1 stamp" : "+1 stamp",
       deltaColor: deducted ? "#D32F2F" : "#2E7D32",
+      category: "rewards",
     };
   }
 
@@ -710,6 +723,7 @@ function describeTransaction(t) {
       subtitle: amt > 0 ? `$${amt.toFixed(2)} spend` : null,
       delta: `+${pts} pts`,
       deltaColor: "#2E7D32",
+      category: "points",
     };
   }
 
@@ -722,6 +736,7 @@ function describeTransaction(t) {
       subtitle: venue,
       delta: pts !== 0 ? `${pts > 0 ? "+" : ""}${pts} pts` : null,
       deltaColor: pts > 0 ? "#2E7D32" : "#888",
+      category: "points",
     };
   }
 
@@ -734,6 +749,7 @@ function describeTransaction(t) {
       subtitle: venue,
       delta: pts !== 0 ? `${pts > 0 ? "+" : ""}${pts} pts` : null,
       deltaColor: pts > 0 ? "#2E7D32" : pts < 0 ? "#D32F2F" : "#888",
+      category: "account",
     };
   }
 
@@ -745,6 +761,7 @@ function describeTransaction(t) {
     subtitle: venue && name ? venue : null,
     delta: pts !== 0 ? `${pts > 0 ? "+" : ""}${pts} pts` : null,
     deltaColor: pts > 0 ? "#2E7D32" : pts < 0 ? "#D32F2F" : "#888",
+    category: "account",
   };
 }
 
@@ -765,7 +782,8 @@ function friendlyDate(iso) {
 }
 
 // U05: Recent Activity component
-function RecentActivity({ transactions }) {
+// U07: accepts setView to route into the full HistoryView
+function RecentActivity({ transactions, setView }) {
   const [expanded, setExpanded] = useState(false);
   const visibleCount = expanded ? 15 : 5;
   const visible = transactions.slice(0, visibleCount);
@@ -817,9 +835,21 @@ function RecentActivity({ transactions }) {
           </div>
 
           {hasMore && (
-            <div style={{ textAlign: "center", marginTop: 10 }}>
+            <div style={{ textAlign: "center", marginTop: 10, display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={() => setExpanded(!expanded)} style={{ background: "none", border: "none", color: C.gold, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 6 }}>
                 {expanded ? "Show less" : `Show more (${Math.min(transactions.length, 15) - 5} more)`}
+              </button>
+              {setView && (
+                <button onClick={() => setView(VIEW.HISTORY)} style={{ background: "none", border: "none", color: C.gold, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 6 }}>
+                  View full history →
+                </button>
+              )}
+            </div>
+          )}
+          {!hasMore && transactions.length > 0 && setView && (
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <button onClick={() => setView(VIEW.HISTORY)} style={{ background: "none", border: "none", color: C.gold, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 6 }}>
+                View full history →
               </button>
             </div>
           )}
@@ -827,6 +857,202 @@ function RecentActivity({ transactions }) {
       )}
     </div>
   );
+}
+
+// ─── U07: HISTORY VIEW — full transaction timeline with filters + date grouping ───
+function HistoryView({ member, setView }) {
+  const [filter, setFilter] = useState("all"); // all | dining | points | rewards
+  const [txns, setTxns] = useState(null); // null = loading, [] = loaded empty
+  const [error, setError] = useState(null);
+
+  // Full history fetch (up to 500 rows — far more than Home's 20)
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await supaFetch(`transactions?member_id=eq.${member.id}&order=created_at.desc&limit=500`);
+        if (Array.isArray(data)) setTxns(data);
+        else { setError("Unable to load history"); setTxns([]); }
+      } catch (e) {
+        console.error(e);
+        setError(e.message || "Unable to load history");
+        setTxns([]);
+      }
+    })();
+  }, [member.id]);
+
+  // Apply filter
+  const enriched = (txns || []).map(t => ({ ...t, _desc: describeTransaction(t) }));
+  const filtered = filter === "all" ? enriched : enriched.filter(t => t._desc.category === filter);
+
+  // Stats card: computed from filtered set
+  const stats = {
+    count: filtered.length,
+    pointsEarned: filtered.reduce((a, t) => a + (t.points > 0 ? t.points : 0), 0),
+    pointsSpent: filtered.reduce((a, t) => a + (t.points < 0 ? -t.points : 0), 0),
+    dollarSpent: filtered.reduce((a, t) => {
+      // only count actual negative cash flows (redemptions, purchases) — ignore tier-upgrade-style adjusts
+      if (t._desc.category === "dining" && t.type === "redeem") return a + parseFloat(t.amount || 0);
+      return a;
+    }, 0),
+  };
+
+  // Group by date bucket: "Today", "Yesterday", "This week", "This month", "MMMM YYYY" for older
+  const buckets = groupByBucket(filtered);
+
+  return (
+    <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setView(VIEW.HOME)} style={{ background: "none", border: "none", color: C.gold, fontSize: 14, cursor: "pointer", padding: 0 }}>← Home</button>
+      </div>
+      <h2 style={s.h2}>Activity Timeline</h2>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
+        {txns === null ? "Loading…" : `Your full activity history — all visits, points, vouchers, and rewards.`}
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
+        {[
+          { id: "all",     label: "All",     icon: "∞" },
+          { id: "dining",  label: "Dining",  icon: "🍽️" },
+          { id: "points",  label: "Points",  icon: "✦" },
+          { id: "rewards", label: "Rewards", icon: "🎁" },
+        ].map(f => {
+          const active = filter === f.id;
+          const n = f.id === "all" ? enriched.length : enriched.filter(t => t._desc.category === f.id).length;
+          return (
+            <div key={f.id} onClick={() => setFilter(f.id)} style={{
+              padding: "8px 14px", borderRadius: 20, fontSize: 12, fontWeight: active ? 600 : 400,
+              background: active ? C.gold : "#fff", color: active ? "#fff" : C.muted,
+              cursor: "pointer", whiteSpace: "nowrap", border: "1px solid #eee", flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span style={{ fontSize: 13 }}>{f.icon}</span>
+              <span>{f.label} · {n}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Stats summary card */}
+      {txns !== null && filtered.length > 0 && (
+        <div style={{ background: "linear-gradient(135deg,#fff,#FAF6ED)", border: "1px solid " + C.gold + "33", borderRadius: 12, padding: 14, marginBottom: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Total entries</div>
+            <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginTop: 2 }}>{stats.count}</div>
+          </div>
+          {filter === "points" || filter === "all" ? (
+            <div>
+              <div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Points earned</div>
+              <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, color: "#2E7D32", marginTop: 2 }}>+{stats.pointsEarned.toLocaleString()}</div>
+            </div>
+          ) : null}
+          {filter === "dining" && (
+            <div>
+              <div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Voucher value redeemed</div>
+              <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, color: C.gold, marginTop: 2 }}>${stats.dollarSpent.toFixed(0)}</div>
+            </div>
+          )}
+          {filter === "rewards" && (
+            <div>
+              <div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Points spent on rewards</div>
+              <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, color: "#D32F2F", marginTop: 2 }}>−{stats.pointsSpent.toLocaleString()}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Loading / empty / error */}
+      {error && (
+        <div style={{ ...s.card, padding: 20, textAlign: "center", color: "#D32F2F", fontSize: 13 }}>
+          ❌ {error}
+        </div>
+      )}
+      {txns === null && !error && (
+        <div style={{ ...s.card, padding: 40, textAlign: "center", color: C.muted }}>
+          <div style={{ display: "inline-block", width: 24, height: 24, border: "3px solid #eee", borderTopColor: C.gold, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <div style={{ fontSize: 12, marginTop: 10 }}>Loading your history…</div>
+        </div>
+      )}
+      {txns !== null && filtered.length === 0 && !error && (
+        <div style={{ ...s.card, padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
+          <div style={{ fontWeight: 500, color: C.text, marginBottom: 4 }}>
+            {enriched.length === 0 ? "No activity yet" : `No ${filter} activity`}
+          </div>
+          <div style={{ fontSize: 11 }}>
+            {enriched.length === 0 ? "Your history will appear here as you visit, earn, and redeem." : "Try a different filter."}
+          </div>
+        </div>
+      )}
+
+      {/* Timeline with date buckets */}
+      {txns !== null && filtered.length > 0 && buckets.map(bucket => (
+        <div key={bucket.label} style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2 }}>{bucket.label}</div>
+            <div style={{ flex: 1, height: 1, background: "#eee" }} />
+            <div style={{ fontSize: 10, color: C.lmuted }}>{bucket.entries.length} {bucket.entries.length === 1 ? "entry" : "entries"}</div>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 8px rgba(0,0,0,.04)", overflow: "hidden" }}>
+            {bucket.entries.map((t, i) => {
+              const desc = t._desc;
+              const timeLabel = new Date(t.created_at).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", hour12: true });
+              return (
+                <div key={t.id || i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px", borderBottom: i < bucket.entries.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: desc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{desc.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: C.text, lineHeight: 1.35 }}>
+                      {desc.title}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>
+                      {desc.subtitle ? <>{desc.subtitle} · </> : null}{timeLabel}
+                    </div>
+                  </div>
+                  {desc.delta && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: desc.deltaColor, flexShrink: 0, whiteSpace: "nowrap", textAlign: "right" }}>
+                      {desc.delta}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// U07: Group enriched transactions by human-friendly date bucket.
+// Buckets: Today → Yesterday → This week → This month → "MMMM YYYY" for older
+function groupByBucket(enriched) {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dayMs = 86400000;
+  const startOfYesterday = startOfToday - dayMs;
+  const startOfThisWeek = startOfToday - (6 * dayMs);       // last 7 days window
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  const buckets = {};
+  const order = [];
+
+  for (const t of enriched) {
+    const ts = new Date(t.created_at).getTime();
+    let label;
+    if (ts >= startOfToday) label = "Today";
+    else if (ts >= startOfYesterday) label = "Yesterday";
+    else if (ts >= startOfThisWeek) label = "This week";
+    else if (ts >= startOfThisMonth) label = "This month";
+    else label = new Date(t.created_at).toLocaleDateString("en-SG", { month: "long", year: "numeric" });
+
+    if (!buckets[label]) {
+      buckets[label] = [];
+      order.push(label);
+    }
+    buckets[label].push(t);
+  }
+
+  return order.map(label => ({ label, entries: buckets[label] }));
 }
 
 function RewardsView({ member, rewards, reload }) {
