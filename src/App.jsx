@@ -12,12 +12,52 @@ const supaFetch = async (path, opts = {}) => {
 };
 
 const redeemReward = async (memberId, reward, currentPoints) => {
+  if (currentPoints < reward.points_cost) {
+    throw new Error(`Not enough points. You have ${currentPoints.toLocaleString()}, this reward costs ${reward.points_cost.toLocaleString()}.`);
+  }
   const newPoints = currentPoints - reward.points_cost;
   await supaFetch(`members?id=eq.${memberId}`, { method: "PATCH", body: { points: newPoints } });
   await supaFetch(`rewards?id=eq.${reward.id}`, { method: "PATCH", body: { redemptions: (reward.redemptions || 0) + 1 } });
   await supaFetch("transactions", { method: "POST", body: { member_id: memberId, venue: "1-Insider Rewards", amount: 0, points: -reward.points_cost, type: "redeem", reward_name: reward.name } });
   return newPoints;
 };
+
+// U09: Convert points into a cash dining voucher (separate from the rewards path)
+const redeemPointsToVoucher = async (memberId, pointsCost, voucherValue, currentPoints) => {
+  if (currentPoints < pointsCost) {
+    throw new Error(`Not enough points. You have ${currentPoints.toLocaleString()}, this voucher costs ${pointsCost.toLocaleString()}.`);
+  }
+  const newPoints = currentPoints - pointsCost;
+  // 1. Deduct points
+  await supaFetch(`members?id=eq.${memberId}`, { method: "PATCH", body: { points: newPoints } });
+  // 2. Create voucher row in U16 vouchers table
+  const voucherRes = await supaFetch("vouchers", {
+    method: "POST",
+    body: {
+      member_id: memberId,
+      type: "points",
+      value: voucherValue,
+      status: "active",
+      source: "points_redemption",
+    },
+  });
+  const voucher = Array.isArray(voucherRes) && voucherRes[0] ? voucherRes[0] : null;
+  // 3. Write transaction log with both the points deduction and the voucher creation
+  await supaFetch("transactions", {
+    method: "POST",
+    body: {
+      member_id: memberId,
+      venue: "1-Insider Rewards",
+      amount: voucherValue,
+      points: -pointsCost,
+      type: "redeem",
+      reward_name: `Points voucher: $${voucherValue}`,
+      note: voucher ? `Voucher #${String(voucher.id).slice(0, 8)} added to wallet` : null,
+    },
+  });
+  return { newPoints, voucher };
+};
+
 
 const C = { gold: "#C5A258", dark: "#111", bg: "#FAF8F5", text: "#1A1A1A", muted: "#888", lmuted: "#999" };
 const TIER = {
@@ -649,6 +689,10 @@ function RewardsView({ member, rewards, reload }) {
   const [redeeming, setRedeeming] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState(null);
+  // U09: separate state for points-to-voucher conversion
+  const [pointsVoucher, setPointsVoucher] = useState(null); // { points, value }
+  const [convertingVoucher, setConvertingVoucher] = useState(false);
+  const [voucherResult, setVoucherResult] = useState(null);
 
   const cats = ["all", "cafes", "restaurants", "bars", "wines"];
   const catLabels = { all: "All", cafes: "☕ Cafés", restaurants: "🍽️ Restaurants", bars: "🍸 Bars", wines: "🍷 Wines" };
@@ -661,8 +705,24 @@ function RewardsView({ member, rewards, reload }) {
       const newPts = await redeemReward(member.id, redeeming, member.points);
       setResult({ success: true, pts: newPts, reward: redeeming.name });
       reload();
-    } catch(e) { setResult({ success: false }); }
+    } catch(e) {
+      setResult({ success: false, error: e.message || "Unable to redeem. Please try again." });
+    }
     setConfirming(false);
+  };
+
+  // U09: Convert points to cash voucher
+  const handleConvertToVoucher = async () => {
+    if (!pointsVoucher) return;
+    setConvertingVoucher(true);
+    try {
+      const { newPoints, voucher } = await redeemPointsToVoucher(member.id, pointsVoucher.points, pointsVoucher.value, member.points || 0);
+      setVoucherResult({ success: true, pts: newPoints, value: pointsVoucher.value, voucherId: voucher?.id });
+      reload();
+    } catch (e) {
+      setVoucherResult({ success: false, error: e.message || "Unable to convert points. Please try again." });
+    }
+    setConvertingVoucher(false);
   };
 
   return (
@@ -672,15 +732,38 @@ function RewardsView({ member, rewards, reload }) {
         <span style={{ fontWeight: 600 }}>{(member.points || 0).toLocaleString()}</span> <span style={{ color: C.muted }}>points available</span>
       </div>
 
+      {/* U09: Now-clickable Points → Voucher card */}
       <div style={{ ...s.card, background: "linear-gradient(135deg," + C.dark + ",#1a180f)", color: "#fff", marginBottom: 20 }}>
-        <div style={{ fontSize: 10, color: C.gold, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 8 }}>✦ Redeem Points for Vouchers</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: C.gold, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>✦ Redeem Points for Vouchers</div>
+          <div style={{ fontSize: 10, color: "#888" }}>Tap a tier</div>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {REDEEM_TIERS.map((r, i) => (
-            <div key={i} style={{ flex: 1, background: "rgba(255,255,255,.1)", borderRadius: 10, padding: 10, textAlign: "center", opacity: (member.points || 0) >= r.points ? 1 : 0.4 }}>
-              <div style={{ fontFamily: FONT.h, fontSize: 16, fontWeight: 700 }}>{"$" + r.value}</div>
-              <div style={{ fontSize: 10, color: "#aaa" }}>{r.points} pts</div>
-            </div>
-          ))}
+          {REDEEM_TIERS.map((r, i) => {
+            const canAfford = (member.points || 0) >= r.points;
+            return (
+              <div key={i}
+                onClick={() => canAfford && setPointsVoucher({ points: r.points, value: r.value })}
+                style={{
+                  flex: 1,
+                  background: "rgba(255,255,255,.1)",
+                  borderRadius: 10,
+                  padding: 12,
+                  textAlign: "center",
+                  opacity: canAfford ? 1 : 0.4,
+                  cursor: canAfford ? "pointer" : "not-allowed",
+                  border: canAfford ? "1px solid rgba(197,162,88,.3)" : "1px solid transparent",
+                  transition: "all .2s",
+                }}>
+                <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 700 }}>{"$" + r.value}</div>
+                <div style={{ fontSize: 10, color: "#aaa", marginTop: 2 }}>{r.points} pts</div>
+                {canAfford && <div style={{ fontSize: 9, color: C.gold, marginTop: 4, letterSpacing: 0.8 }}>REDEEM →</div>}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 10, color: "#888", marginTop: 10, textAlign: "center" }}>
+          Points vouchers are added to your wallet and usable on your next bill
         </div>
       </div>
 
@@ -708,6 +791,7 @@ function RewardsView({ member, rewards, reload }) {
         );
       }) : <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 20 }}>No rewards in this category</div>}
 
+      {/* Rewards confirmation modal */}
       {redeeming && !result && (
         <div style={s.modal} onClick={() => { setRedeeming(null); setConfirming(false); }}>
           <div style={s.modalInner} onClick={e => e.stopPropagation()}>
@@ -716,7 +800,7 @@ function RewardsView({ member, rewards, reload }) {
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>{redeeming.description}</div>
             <div style={{ background: C.bg, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
               <div><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Cost</div><div style={{ fontWeight: 600 }}>{redeeming.points_cost} pts</div></div>
-              <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Balance After</div><div style={{ fontWeight: 600 }}>{(member.points - redeeming.points_cost).toLocaleString()} pts</div></div>
+              <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: C.lmuted, textTransform: "uppercase" }}>Balance After</div><div style={{ fontWeight: 600 }}>{((member.points || 0) - redeeming.points_cost).toLocaleString()} pts</div></div>
             </div>
             <button onClick={handleRedeem} disabled={confirming} style={{ ...s.btn, opacity: confirming ? 0.6 : 1, marginBottom: 8 }}>
               {confirming ? "Redeeming…" : "Confirm"}
@@ -726,18 +810,69 @@ function RewardsView({ member, rewards, reload }) {
         </div>
       )}
 
+      {/* Rewards result modal */}
       {result && (
         <div style={s.modal} onClick={() => { setResult(null); setRedeeming(null); }}>
           <div style={{ ...s.modalInner, textAlign: "center" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>{result.success ? "🎉" : "❌"}</div>
-            <h3 style={{ fontFamily: FONT.h, fontSize: 20, marginBottom: 8 }}>{result.success ? "Redeemed!" : "Error"}</h3>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, marginBottom: 8 }}>{result.success ? "Redeemed!" : "Unable to redeem"}</h3>
             {result.success ? (
               <div>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 4 }}>{result.reward}</div>
                 <div style={{ fontSize: 13 }}>New balance: <strong>{(result.pts || 0).toLocaleString()} pts</strong></div>
               </div>
-            ) : <div style={{ fontSize: 13, color: "#D32F2F" }}>Something went wrong. Please try again.</div>}
+            ) : <div style={{ fontSize: 13, color: "#D32F2F" }}>{result.error || "Something went wrong. Please try again."}</div>}
             <button onClick={() => { setResult(null); setRedeeming(null); }} style={{ ...s.btn, marginTop: 16 }}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {/* U09: Points voucher conversion modal */}
+      {pointsVoucher && !voucherResult && (
+        <div style={s.modal} onClick={() => { setPointsVoucher(null); setConvertingVoucher(false); }}>
+          <div style={s.modalInner} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 18, marginBottom: 12 }}>Convert points to voucher</h3>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+              Convert {pointsVoucher.points.toLocaleString()} points into a <strong style={{ color: C.text }}>${pointsVoucher.value} dining voucher</strong>. The voucher will be added to your wallet and you can use it on any bill at a 1-Group venue.
+            </div>
+            <div style={{ background: C.bg, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: C.muted }}>Points to convert</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>−{pointsVoucher.points.toLocaleString()} pts</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: C.muted }}>Voucher value</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: C.gold }}>+${pointsVoucher.value}</div>
+              </div>
+              <div style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8, display: "flex", justifyContent: "space-between" }}>
+                <div style={{ fontSize: 12, color: C.muted }}>Points balance after</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{((member.points || 0) - pointsVoucher.points).toLocaleString()} pts</div>
+              </div>
+            </div>
+            <button onClick={handleConvertToVoucher} disabled={convertingVoucher} style={{ ...s.btn, opacity: convertingVoucher ? 0.6 : 1, marginBottom: 8 }}>
+              {convertingVoucher ? "Converting…" : `Convert to $${pointsVoucher.value} voucher`}
+            </button>
+            <button onClick={() => setPointsVoucher(null)} style={s.btnOutline}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* U09: Points voucher conversion result modal */}
+      {voucherResult && (
+        <div style={s.modal} onClick={() => { setVoucherResult(null); setPointsVoucher(null); }}>
+          <div style={{ ...s.modalInner, textAlign: "center" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{voucherResult.success ? "🎟️" : "❌"}</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, marginBottom: 8 }}>{voucherResult.success ? "Voucher added!" : "Conversion failed"}</h3>
+            {voucherResult.success ? (
+              <div>
+                <div style={{ fontSize: 14, color: C.text, marginBottom: 6 }}>
+                  <strong>${voucherResult.value}</strong> dining voucher is now in your wallet
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>New points balance: <strong>{(voucherResult.pts || 0).toLocaleString()} pts</strong></div>
+                {voucherResult.voucherId && <div style={{ fontSize: 10, color: C.lmuted, fontFamily: FONT.m, marginTop: 6 }}>ID: {String(voucherResult.voucherId).slice(0, 8)}</div>}
+              </div>
+            ) : <div style={{ fontSize: 13, color: "#D32F2F" }}>{voucherResult.error || "Something went wrong. Please try again."}</div>}
+            <button onClick={() => { setVoucherResult(null); setPointsVoucher(null); }} style={{ ...s.btn, marginTop: 16 }}>Done</button>
           </div>
         </div>
       )}
