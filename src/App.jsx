@@ -145,20 +145,23 @@ export default function App() {
   const [transactions, setTxns] = useState([]);
   const [vouchers, setVouchers] = useState([]);
   const [giftCards, setGiftCards] = useState([]);
+  const [tiers, setTiers] = useState([]);
 
   const loadMemberData = useCallback(async (memberId) => {
-    const [m, r, t, v, g] = await Promise.all([
+    const [m, r, t, v, g, tiersList] = await Promise.all([
       supaFetch("members?id=eq." + memberId),
       supaFetch("rewards?active=eq.true&order=id.asc"),
       supaFetch("transactions?member_id=eq." + memberId + "&order=created_at.desc&limit=20"),
       supaFetch("vouchers?member_id=eq." + memberId + "&order=issued_at.desc"),
       supaFetch("gift_cards?purchaser_id=eq." + memberId + "&order=created_at.desc"),
+      supaFetch("tiers?select=*&order=annual_fee.asc"),
     ]);
     if (Array.isArray(m) && m[0]) setMember(m[0]);
     if (Array.isArray(r)) setRewards(r);
     if (Array.isArray(t)) setTxns(t);
     if (Array.isArray(v)) setVouchers(v);
     if (Array.isArray(g)) setGiftCards(g);
+    if (Array.isArray(tiersList)) setTiers(tiersList);
   }, []);
 
   const signOut = () => { setMember(null); setView(VIEW.LANDING); };
@@ -201,7 +204,7 @@ export default function App() {
       {view === VIEW.HOME && member && <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
-      {view === VIEW.PROFILE && member && <Profile member={member} signOut={signOut} />}
+      {view === VIEW.PROFILE && member && <Profile member={member} tiers={tiers} signOut={signOut} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.WALLET && member && <Wallet member={member} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.GIFTCARDS && member && <GiftCards member={member} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
 
@@ -550,6 +553,21 @@ function describeTransaction(t) {
   const name = t.reward_name || "";
   const pts = t.points || 0;
   const amt = parseFloat(t.amount || 0);
+
+  // U11: Tier upgrade
+  if (t.type === "adjust" && name.startsWith("Tier upgrade:")) {
+    const upgradeMatch = name.match(/Tier upgrade:\s*(\w+)\s*→\s*(\w+)/);
+    const from = upgradeMatch ? upgradeMatch[1] : "";
+    const to = upgradeMatch ? upgradeMatch[2] : "";
+    return {
+      icon: "✦",
+      iconBg: "#FDF8EE",
+      title: `Upgraded to ${to.charAt(0).toUpperCase() + to.slice(1)}`,
+      subtitle: from ? `from ${from}` : "Tier upgrade",
+      delta: amt > 0 ? `$${amt.toFixed(0)}/yr` : null,
+      deltaColor: "#C5A258",
+    };
+  }
 
   // U06: Gift card purchase (admin-free member action)
   if (t.type === "adjust" && name.startsWith("Purchased $") && name.includes("gift card")) {
@@ -1866,10 +1884,95 @@ function RedeemGiftCardModal({ card, member, onClose }) {
   );
 }
 
-function Profile({ member, signOut }) {
+function Profile({ member, tiers, signOut, reload }) {
   var tier = TIER[member.tier] || TIER.silver;
   var info = TIER_INFO[member.tier] || TIER_INFO.silver;
   var isDark = ["platinum", "corporate"].includes(member.tier);
+
+  // U11 state — upgrade modal
+  const [upgradeTarget, setUpgradeTarget] = useState(null); // the target tier row when modal is open
+  const [upgradePhase, setUpgradePhase] = useState("picking"); // picking | processing | success | error
+  const [upgradeError, setUpgradeError] = useState("");
+
+  // Work out upgrade options from live tiers data
+  const tierOrder = ["silver", "gold", "platinum"];
+  const currentIdx = tierOrder.indexOf(member.tier);
+  const availableUpgrades = (tiers || []).filter(t => {
+    const idx = tierOrder.indexOf(t.id);
+    return idx > currentIdx && idx >= 0;
+  }).sort((a, b) => tierOrder.indexOf(a.id) - tierOrder.indexOf(b.id));
+
+  // Build an impact-diff between current tier and target for the upgrade modal
+  const diffForTarget = (target) => {
+    if (!target) return [];
+    const currentTier = (tiers || []).find(t => t.id === member.tier) || {};
+    const changes = [];
+    if ((currentTier.earn_multiplier || 1) !== target.earn_multiplier) {
+      changes.push({
+        label: "Earn rate",
+        from: `${(currentTier.earn_multiplier || 1)}× ($1 = ${currentTier.earn_multiplier || 1} pts)`,
+        to: `${target.earn_multiplier}× ($1 = ${target.earn_multiplier} pts)`,
+      });
+    }
+    if ((currentTier.birthday_discount_pct || 0) !== target.birthday_discount_pct) {
+      changes.push({ label: "Birthday discount", from: `${currentTier.birthday_discount_pct || 0}%`, to: `${target.birthday_discount_pct}%` });
+    }
+    if ((currentTier.voucher_count || 0) !== target.voucher_count || (currentTier.voucher_value || 0) !== target.voucher_value) {
+      changes.push({
+        label: "Dining vouchers",
+        from: currentTier.voucher_count ? `${currentTier.voucher_count}×$${currentTier.voucher_value}` : "None",
+        to: `${target.voucher_count}×$${target.voucher_value}`,
+      });
+    }
+    if (!currentTier.non_stop_hits && target.non_stop_hits) {
+      changes.push({ label: "Non-Stop Hits", from: "Not included", to: "Unlimited voucher refill" });
+    }
+    return changes;
+  };
+
+  const confirmUpgrade = async () => {
+    if (!upgradeTarget) return;
+    setUpgradePhase("processing");
+    setUpgradeError("");
+    try {
+      // Compute new expiry — 1 year from today
+      const newExpiry = new Date();
+      newExpiry.setFullYear(newExpiry.getFullYear() + 1);
+      const expiryIso = newExpiry.toISOString();
+
+      await supaFetch(`members?id=eq.${member.id}`, {
+        method: "PATCH",
+        body: { tier: upgradeTarget.id, membership_expiry: expiryIso },
+      });
+
+      // Transaction log — the upgrade itself
+      await supaFetch("transactions", {
+        method: "POST",
+        body: {
+          member_id: member.id,
+          venue: "1-Insider Rewards",
+          amount: parseFloat(upgradeTarget.annual_fee || 0),
+          points: 0,
+          type: "adjust",
+          reward_name: `Tier upgrade: ${member.tier} → ${upgradeTarget.id}`,
+          note: `$${upgradeTarget.annual_fee}/yr · expires ${newExpiry.toLocaleDateString("en-SG")}`,
+        },
+      });
+
+      setUpgradePhase("success");
+    } catch (e) {
+      console.error("Upgrade failed:", e);
+      setUpgradeError(e.message || "Unable to complete upgrade");
+      setUpgradePhase("error");
+    }
+  };
+
+  const closeUpgradeModal = () => {
+    setUpgradeTarget(null);
+    setUpgradePhase("picking");
+    setUpgradeError("");
+    if (reload) reload();
+  };
 
   return (
     <div style={{ ...s.page, animation: "fadeIn .3s ease" }}>
@@ -1910,15 +2013,157 @@ function Profile({ member, signOut }) {
         {member.membership_expiry && (
           <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Expires: {new Date(member.membership_expiry).toLocaleDateString()}</div>
         )}
-        {member.tier === "silver" && (
-          <div style={{ marginTop: 12, background: "#FDF8EE", borderRadius: 10, padding: 12, textAlign: "center" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#8B6914" }}>Upgrade to Gold for $40/year</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>1.5× earn rate · 10×$20 dining vouchers · Priority reservations</div>
-          </div>
-        )}
       </div>
 
+      {/* U11: Upgrade CTAs — only for self-service tiers (silver/gold) */}
+      {availableUpgrades.length > 0 && ["silver", "gold"].includes(member.tier) && (
+        <>
+          <h3 style={s.h3}>Upgrade Your Tier</h3>
+          {availableUpgrades.map(target => {
+            const targetTheme = TIER[target.id] || TIER.silver;
+            const dark = ["platinum", "corporate"].includes(target.id);
+            const changes = diffForTarget(target);
+            return (
+              <div key={target.id}
+                onClick={() => { setUpgradeTarget(target); setUpgradePhase("picking"); }}
+                style={{
+                  background: targetTheme.grad,
+                  borderRadius: 14, padding: 18, marginBottom: 12,
+                  color: dark ? "#fff" : C.text,
+                  cursor: "pointer", position: "relative",
+                  boxShadow: "0 2px 12px rgba(0,0,0,.08)",
+                  transition: "transform .15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 10, opacity: 0.8, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Upgrade to</div>
+                    <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>{target.name}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>${target.annual_fee}</div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>per year</div>
+                  </div>
+                </div>
+                {changes.length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.2)" }}>
+                    <div style={{ fontSize: 10, opacity: 0.75, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>What you gain</div>
+                    {changes.slice(0, 3).map((c, i) => (
+                      <div key={i} style={{ fontSize: 11, marginBottom: 3, opacity: 0.95 }}>
+                        <strong>{c.label}:</strong> <span style={{ opacity: 0.75 }}>{c.from}</span> → <span style={{ fontWeight: 600 }}>{c.to}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ marginTop: 12, fontSize: 11, opacity: 0.9, fontWeight: 600, letterSpacing: 0.5 }}>Tap to upgrade →</div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Informational state for Platinum members (top tier, no upgrade) */}
+      {member.tier === "platinum" && (
+        <div style={{ ...s.card, background: "linear-gradient(135deg,#2D2D2D,#1a1a1a)", color: "#fff", textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>✦</div>
+          <div style={{ fontFamily: FONT.h, fontSize: 16, fontWeight: 600, marginBottom: 4 }}>You&apos;re at our highest tier</div>
+          <div style={{ fontSize: 12, opacity: 0.75 }}>Thank you for being a Platinum member. Enjoy every visit.</div>
+        </div>
+      )}
+
+      {/* Informational state for Corporate/Staff */}
+      {["corporate", "staff"].includes(member.tier) && (
+        <div style={{ ...s.card, fontSize: 12, color: C.muted, textAlign: "center" }}>
+          {member.tier === "corporate" ? "Corporate tier is managed by your account manager — contact them to change your plan." : "Staff tier is managed by 1-Group HR — contact your manager for changes."}
+        </div>
+      )}
+
       <button onClick={signOut} style={{ ...s.btnOutline, marginTop: 16, color: "#D32F2F", borderColor: "#D32F2F" }}>Sign Out</button>
+
+      {/* U11: Upgrade confirmation modal (demo Stripe flow) */}
+      {upgradeTarget && (
+        <div style={s.modal} onClick={() => upgradePhase !== "processing" && closeUpgradeModal()}>
+          <div style={{ ...s.modalInner, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            {upgradePhase === "picking" && (
+              <>
+                <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Upgrade to {upgradeTarget.name}</h3>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Your tier will upgrade immediately. Billing is annual.</div>
+
+                {/* Cost summary */}
+                <div style={{ background: "#FDF8EE", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>Annual fee</span>
+                    <span style={{ fontWeight: 600, fontSize: 14, fontFamily: FONT.h }}>${upgradeTarget.annual_fee}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>New expiry</span>
+                    <span style={{ fontWeight: 500, fontSize: 12 }}>
+                      {(() => {
+                        const d = new Date(); d.setFullYear(d.getFullYear() + 1);
+                        return d.toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* What you gain */}
+                {diffForTarget(upgradeTarget).length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 10.5, color: C.lmuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>What changes</div>
+                    {diffForTarget(upgradeTarget).map((c, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < diffForTarget(upgradeTarget).length - 1 ? "1px solid #f5f5f5" : "none", fontSize: 12 }}>
+                        <span style={{ color: C.muted }}>{c.label}</span>
+                        <span style={{ textAlign: "right" }}>
+                          <span style={{ color: C.lmuted, fontSize: 11 }}>{c.from}</span>
+                          <span style={{ margin: "0 6px", color: C.gold }}>→</span>
+                          <span style={{ fontWeight: 600 }}>{c.to}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: 10, fontSize: 10.5, color: "#5D4037", marginBottom: 14, lineHeight: 1.5 }}>
+                  ⚠️ Demo mode: upgrade is processed immediately but Stripe is not wired in. No real charge is made. Your tier will update across the portal and admin dashboard.
+                </div>
+
+                <button onClick={confirmUpgrade} style={{ ...s.btn, marginBottom: 8 }}>
+                  Confirm ${upgradeTarget.annual_fee} upgrade
+                </button>
+                <button onClick={closeUpgradeModal} style={s.btnOutline}>Cancel</button>
+              </>
+            )}
+
+            {upgradePhase === "processing" && (
+              <div style={{ textAlign: "center", padding: "30px 0" }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+                <div style={{ fontSize: 14, color: C.muted }}>Processing upgrade…</div>
+              </div>
+            )}
+
+            {upgradePhase === "success" && (
+              <div style={{ textAlign: "center", padding: "10px 0" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✨</div>
+                <h3 style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Welcome to {upgradeTarget.name}</h3>
+                <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Your tier has been upgraded immediately.</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Explore your new benefits on the next visit.</div>
+                <button onClick={closeUpgradeModal} style={s.btn}>Done</button>
+              </div>
+            )}
+
+            {upgradePhase === "error" && (
+              <div style={{ textAlign: "center", padding: "10px 0" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+                <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Upgrade failed</h3>
+                <div style={{ fontSize: 13, color: "#D32F2F", marginBottom: 20 }}>{upgradeError}</div>
+                <button onClick={closeUpgradeModal} style={s.btn}>Close</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
