@@ -298,16 +298,26 @@ function Landing({ onSignIn }) {
 }
 
 function SignIn({ onSuccess, onBack }) {
+  const [method, setMethod] = useState("mobile"); // U14: 'mobile' | 'email'
   const [step, setStep] = useState(1);
   const [mobile, setMobile] = useState("");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showEberBlocker, setShowEberBlocker] = useState(false);
 
   const sendOtp = () => {
     setError("");
     if (!mobile || mobile.length < 4) { setError("Enter a valid mobile number"); return; }
     setStep(2);
+  };
+
+  // U14: Email path — blocked by Eber L03 (mobile OTP only). Show informative modal.
+  const attemptEmailSignIn = () => {
+    setError("");
+    if (!email || !email.includes("@")) { setError("Enter a valid email address"); return; }
+    setShowEberBlocker(true);
   };
 
   const verifyOtp = async () => {
@@ -327,12 +337,37 @@ function SignIn({ onSuccess, onBack }) {
 
   return (
     <div style={{ padding: 24, paddingTop: 60, animation: "fadeIn .3s ease" }}>
-      <div style={{ textAlign: "center", marginBottom: 32 }}>
+      <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div style={{ fontFamily: FONT.h, fontSize: 12, color: C.gold, letterSpacing: 3, textTransform: "uppercase", marginBottom: 8 }}>✦ 1-INSIDER</div>
         <h2 style={{ fontFamily: FONT.h, fontSize: 24, fontWeight: 700 }}>Sign in to continue</h2>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Enter your mobile number to receive a one-time passcode</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+          {method === "mobile" ? "Enter your mobile number to receive a one-time passcode" : "Enter your registered email"}
+        </div>
       </div>
-      {step === 1 ? (
+
+      {/* U14: Method selector — appears on step 1 only */}
+      {step === 1 && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "#f5f5f5", borderRadius: 10, padding: 3 }}>
+          {[
+            { id: "mobile", label: "📱 Mobile", sub: "OTP" },
+            { id: "email", label: "✉️ Email", sub: "Coming soon" },
+          ].map(m => (
+            <div key={m.id} onClick={() => { setMethod(m.id); setError(""); }} style={{
+              flex: 1, padding: "10px 8px", borderRadius: 8, textAlign: "center", cursor: "pointer",
+              background: method === m.id ? "#fff" : "transparent",
+              color: method === m.id ? C.text : C.muted,
+              fontWeight: method === m.id ? 600 : 400,
+              boxShadow: method === m.id ? "0 1px 4px rgba(0,0,0,.06)" : "none",
+              transition: "all .2s",
+            }}>
+              <div style={{ fontSize: 13 }}>{m.label}</div>
+              <div style={{ fontSize: 9, color: C.lmuted, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{m.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {step === 1 && method === "mobile" && (
         <div>
           <label style={{ fontSize: 12, color: C.muted, fontWeight: 600, display: "block", marginBottom: 6 }}>Mobile Number</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -343,7 +378,31 @@ function SignIn({ onSuccess, onBack }) {
           <button onClick={sendOtp} style={s.btn}>Send OTP</button>
           <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: C.muted }}>Demo mode: any OTP works</div>
         </div>
-      ) : (
+      )}
+
+      {step === 1 && method === "email" && (
+        <div>
+          {/* Eber L03 always-on red banner */}
+          <div style={{ background: "#FFEBEE", border: "1px solid #EF9A9A", borderRadius: 10, padding: "12px 14px", fontSize: 11, color: "#B71C1C", marginBottom: 14, lineHeight: 1.5 }}>
+            🚫 <strong>Eber Limitation L03:</strong> email OTP is not currently supported. The Eber platform supports mobile OTP only. Email login is tracked as a platform development request — this preview lets you see the intended experience.
+          </div>
+          <label style={{ fontSize: 12, color: C.muted, fontWeight: 600, display: "block", marginBottom: 6 }}>Email Address</label>
+          <input
+            style={{ ...s.input, marginBottom: 16 }}
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+          />
+          {error && <div style={{ color: "#D32F2F", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+          <button onClick={attemptEmailSignIn} style={s.btn}>Send email OTP (preview)</button>
+          <div style={{ textAlign: "center", marginTop: 12, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+            This is a UX preview. Pressing &ldquo;Send&rdquo; will show the planned experience without actually signing you in.
+          </div>
+        </div>
+      )}
+
+      {step === 2 && method === "mobile" && (
         <div>
           <div style={{ fontSize: 13, color: C.muted, textAlign: "center", marginBottom: 16 }}>OTP sent to +65 {mobile}</div>
           <input style={{ ...s.input, textAlign: "center", fontSize: 24, letterSpacing: 8, fontFamily: FONT.m, marginBottom: 16 }} placeholder="000000" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))} maxLength={6} />
@@ -356,9 +415,35 @@ function SignIn({ onSuccess, onBack }) {
           </div>
         </div>
       )}
+
       <div style={{ textAlign: "center", marginTop: 24 }}>
         <span style={{ fontSize: 12, color: C.muted, cursor: "pointer" }} onClick={onBack}>← Back to home</span>
       </div>
+
+      {/* U14: Eber L03 blocker modal — shown when user attempts email send */}
+      {showEberBlocker && (
+        <div style={s.modal} onClick={() => setShowEberBlocker(false)}>
+          <div style={{ ...s.modalInner, maxWidth: 400, textAlign: "center" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🚫</div>
+            <h3 style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Email sign-in coming soon</h3>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+              We&rsquo;ve captured the UX here so you can see how it will work, but the Eber loyalty platform (our backend) currently only supports mobile-number OTP verification.
+            </div>
+            <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: 12, fontSize: 11, color: "#5D4037", marginBottom: 16, lineHeight: 1.5, textAlign: "left" }}>
+              <strong>What happens next:</strong>
+              <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+                <li style={{ marginBottom: 3 }}>1-Group has raised email OTP as a platform development request with Eber.</li>
+                <li style={{ marginBottom: 3 }}>Eber is reviewing the technical change.</li>
+                <li>Once live, your registered email on file can receive the 6-digit passcode.</li>
+              </ul>
+            </div>
+            <button onClick={() => { setShowEberBlocker(false); setMethod("mobile"); setError(""); }} style={{ ...s.btn, marginBottom: 8 }}>
+              Use mobile OTP instead
+            </button>
+            <button onClick={() => setShowEberBlocker(false)} style={s.btnOutline}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -411,6 +496,9 @@ function Home({ member, transactions, vouchers, giftCards, setView, reload }) {
         </div>
         <div style={{ fontFamily: FONT.m, fontSize: 10, opacity: 0.5, marginTop: 12 }}>{member.id} · {info.earn}</div>
       </div>
+
+      {/* U13: Bookings slideshow — rotates through upcoming/past reservations */}
+      <BookingsSlideshow transactions={transactions} setView={setView} />
 
       {/* U10: Voucher Wallet entry card — shows individual vouchers (points, admin-added, etc.) */}
       {(() => {
@@ -564,6 +652,147 @@ function Home({ member, transactions, vouchers, giftCards, setView, reload }) {
       <RecentActivity transactions={transactions} setView={setView} />
 
       <button onClick={reload} style={{ ...s.btnOutline, marginTop: 16, fontSize: 12 }}>↻ Refresh Data</button>
+    </div>
+  );
+}
+
+// ─── U13: BOOKINGS SLIDESHOW ───
+// Parses U12's reservation transactions and rotates a hero slot through
+// the member's upcoming (and most-recent past) bookings.
+
+// Parse a reservation transaction's note field ("2026-04-20 at 19:30 · party of 4 · notes: …")
+function parseBookingNote(note) {
+  if (!note) return null;
+  const m = note.match(/(\d{4}-\d{2}-\d{2})\s+at\s+(\d{1,2}:\d{2})\s*·\s*party of\s*(\d+)/i);
+  if (!m) return null;
+  const date = new Date(`${m[1]}T${m[2]}:00`);
+  return { date, dateStr: m[1], timeStr: m[2], party: parseInt(m[3], 10) };
+}
+
+function BookingsSlideshow({ transactions, setView }) {
+  // Extract reservations with parseable dates
+  const bookings = (transactions || [])
+    .filter(t => t.type === "adjust" && (t.reward_name || "").startsWith("Reservation request:"))
+    .map(t => {
+      const parsed = parseBookingNote(t.note);
+      if (!parsed) return null;
+      return {
+        venue: (t.reward_name || "").replace(/^Reservation request:\s*/, "").trim(),
+        date: parsed.date,
+        dateStr: parsed.dateStr,
+        timeStr: parsed.timeStr,
+        party: parsed.party,
+        transactionId: t.id,
+      };
+    })
+    .filter(Boolean);
+
+  const now = Date.now();
+  const upcoming = bookings.filter(b => b.date.getTime() >= now).sort((a, b) => a.date - b.date);
+  const past = bookings.filter(b => b.date.getTime() < now).sort((a, b) => b.date - a.date);
+
+  // Prioritise upcoming; if none, show the most recent past booking as a memory
+  const slides = upcoming.length > 0 ? upcoming.slice(0, 5) : past.slice(0, 3);
+
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused || slides.length < 2) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % slides.length), 4500);
+    return () => clearInterval(t);
+  }, [paused, slides.length]);
+
+  // If idx drifts beyond slides length after reload, clamp it
+  useEffect(() => { if (idx >= slides.length && slides.length > 0) setIdx(0); }, [slides.length, idx]);
+
+  // Empty state — route to Explore
+  if (slides.length === 0) {
+    return (
+      <div onClick={() => setView(VIEW.EXPLORE)} style={{
+        background: "linear-gradient(135deg,#F0F4F8,#E4ECF4)",
+        border: "1.5px dashed #4A7A9566",
+        borderRadius: 12, padding: 18,
+        marginBottom: 14,
+        cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 14,
+      }}>
+        <div style={{ width: 46, height: 46, borderRadius: 10, background: "#4A7A9522", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>📅</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: FONT.h, fontSize: 14, fontWeight: 600 }}>Plan your next visit</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>No upcoming bookings. Browse all 24 venues &rarr;</div>
+        </div>
+      </div>
+    );
+  }
+
+  const current = slides[idx];
+  const isUpcoming = current.date.getTime() >= now;
+
+  // Relative time formatter
+  const dayMs = 86400000;
+  const diffDays = Math.round((current.date.getTime() - now) / dayMs);
+  let when;
+  if (isUpcoming) {
+    if (diffDays === 0) when = "Today";
+    else if (diffDays === 1) when = "Tomorrow";
+    else if (diffDays < 7) when = `In ${diffDays} days`;
+    else when = current.date.toLocaleDateString("en-SG", { day: "numeric", month: "short" });
+  } else {
+    const daysAgo = Math.abs(diffDays);
+    if (daysAgo === 0) when = "Earlier today";
+    else if (daysAgo === 1) when = "Yesterday";
+    else if (daysAgo < 7) when = `${daysAgo} days ago`;
+    else when = current.date.toLocaleDateString("en-SG", { day: "numeric", month: "short" });
+  }
+
+  return (
+    <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      style={{
+        background: isUpcoming
+          ? "linear-gradient(135deg,#4A7A95,#6E9FB5)"
+          : "linear-gradient(135deg,#888,#aaa)",
+        borderRadius: 14, padding: 18, marginBottom: 14,
+        color: "#fff", position: "relative",
+        boxShadow: "0 2px 12px rgba(0,0,0,.08)",
+        overflow: "hidden",
+        minHeight: 104,
+      }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, opacity: 0.85, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4 }}>
+            📅 {isUpcoming ? "Upcoming booking" : "Last visit"} {slides.length > 1 && <span style={{ opacity: 0.6, marginLeft: 6 }}>{idx + 1} / {slides.length}</span>}
+          </div>
+          <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current.venue}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+          <div style={{ fontFamily: FONT.h, fontSize: 16, fontWeight: 700 }}>{when}</div>
+          <div style={{ fontSize: 10.5, opacity: 0.85, marginTop: 1 }}>{current.timeStr}</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11.5, opacity: 0.9, marginTop: 2 }}>
+        {current.date.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "short" })} · Party of {current.party}
+      </div>
+
+      {/* Dot indicators */}
+      {slides.length > 1 && (
+        <div style={{ display: "flex", gap: 5, marginTop: 12, justifyContent: "center" }}>
+          {slides.map((_, i) => (
+            <div
+              key={i}
+              onClick={(e) => { e.stopPropagation(); setIdx(i); setPaused(true); }}
+              style={{
+                width: i === idx ? 20 : 6, height: 6, borderRadius: 3,
+                background: i === idx ? "#fff" : "rgba(255,255,255,.4)",
+                transition: "width .25s, background .25s",
+                cursor: "pointer",
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
