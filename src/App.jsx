@@ -1289,6 +1289,250 @@ function V2TierSummaryCard({ tierId, info, isActive, onSelect }) {
   );
 }
 
+// ─── S4: Pay / Bookings / Events — helpers ────────────────────────────────
+
+// Format a timestamptz as "Sat, 27 Apr · 2:22 PM" (Singapore locale).
+function v2FormatDateTime(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" });
+    const time = d.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
+    return day + " · " + time;
+  } catch (e) {
+    return iso;
+  }
+}
+
+// Is event visible to this tier? NULL tier_exclusive = visible to all.
+function v2EventVisibleToTier(evt, tierId) {
+  if (!evt.tier_exclusive) return true;
+  if (!Array.isArray(evt.tier_exclusive) || evt.tier_exclusive.length === 0) return true;
+  return evt.tier_exclusive.includes(tierId);
+}
+
+function V2ActionCard({ label, title, caption, onClick, pillLabel }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "18px 20px",
+        background: V2.card,
+        border: "1px solid " + V2.divider,
+        borderRadius: 16,
+        cursor: "pointer",
+        marginBottom: 20,
+        boxShadow: "0 1px 0 rgba(242, 243, 245, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25)",
+        transform: pressed ? "scale(0.985)" : "scale(1)",
+        transition: "transform 120ms ease-out",
+      }}
+    >
+      <div style={{ flex: 1, paddingRight: 14 }}>
+        {label && (
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 6 }}>
+            {label}
+          </div>
+        )}
+        <div style={{ fontFamily: FONT.h, fontSize: 16, fontWeight: 600, color: V2.text, marginBottom: 4, lineHeight: 1.2 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 12, color: V2.textMuted, lineHeight: 1.4 }}>
+          {caption}
+        </div>
+      </div>
+      {pillLabel && (
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "8px 16px",
+            borderRadius: 9999,
+            border: "1px solid " + V2.goldBorder,
+            color: V2.gold,
+            fontSize: 12, fontWeight: 600, letterSpacing: "0.02em",
+          }}
+        >
+          {pillLabel} →
+        </div>
+      )}
+    </div>
+  );
+}
+
+function V2ShelfHeader({ title, count, onSeeAll, seeAllLabel }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0 4px", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 600, color: V2.text, letterSpacing: "-0.01em" }}>
+          {title}
+        </div>
+        {count != null && (
+          <div style={{ fontSize: 12, color: V2.textMuted }}>· {count}</div>
+        )}
+      </div>
+      {onSeeAll && (
+        <div
+          onClick={onSeeAll}
+          style={{ fontSize: 12, fontWeight: 600, color: V2.gold, cursor: "pointer", letterSpacing: "0.02em" }}
+        >
+          {seeAllLabel || "See all"} →
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Horizontal snap-scroll shelf with edge-fade mask.
+function V2Shelf({ children, noEdgeFade }) {
+  const style = {
+    display: "flex", gap: 12, overflowX: "auto",
+    scrollSnapType: "x mandatory",
+    padding: "4px 16px 8px 16px",
+    margin: "0 -20px",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+  };
+  if (!noEdgeFade) {
+    style.WebkitMaskImage = "linear-gradient(90deg, transparent 0, black 20px, black calc(100% - 20px), transparent 100%)";
+    style.maskImage = "linear-gradient(90deg, transparent 0, black 20px, black calc(100% - 20px), transparent 100%)";
+  }
+  return (
+    <div>
+      <style>{".v2-shelf::-webkit-scrollbar { display: none; } .v2-shelf > * { scroll-snap-align: start; }"}</style>
+      <div className="v2-shelf" style={style}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function V2BookingCard({ thumbnail, venueName, dateTime, location, onClick, index }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        display: "flex", flexDirection: "column",
+        width: 200, flexShrink: 0,
+        background: V2.card,
+        borderRadius: 14,
+        border: "1px solid " + V2.divider,
+        overflow: "hidden",
+        cursor: "pointer",
+        padding: 0,
+        textAlign: "left",
+        transform: pressed ? "scale(0.98)" : "scale(1)",
+        transition: "transform 120ms ease-out",
+        animation: "v2-fade-in 400ms ease-out " + (index * 40) + "ms both",
+      }}
+    >
+      <div style={{ width: "100%", aspectRatio: "1/1", background: V2.elevated, overflow: "hidden" }}>
+        {thumbnail && (
+          <img
+            src={thumbnail}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9)" }}
+          />
+        )}
+      </div>
+      <div style={{ padding: 14 }}>
+        <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: V2.text, marginBottom: 4, lineHeight: 1.2 }}>
+          {venueName}
+        </div>
+        <div style={{ fontSize: 12, color: V2.textSecondary, marginBottom: 2 }}>
+          {dateTime}
+        </div>
+        {location && (
+          <div style={{ fontSize: 11, color: V2.textMuted }}>
+            {location}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function V2EventCard({ heroImage, title, venueName, dateTime, status, tierExclusive, onClick, index }) {
+  const [pressed, setPressed] = useState(false);
+  const statusColor = status === "open" ? V2.gold : status === "waitlist" ? V2.info : V2.textMuted;
+  const statusText = status === "open" ? "Booking open" : status === "waitlist" ? "Waitlist" : status === "soldout" ? "Sold out" : status;
+  const isExclusive = Array.isArray(tierExclusive) && tierExclusive.length > 0;
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        position: "relative",
+        width: 280, height: 340,
+        borderRadius: 16,
+        overflow: "hidden",
+        border: "none",
+        padding: 0,
+        background: V2.elevated,
+        cursor: "pointer",
+        flexShrink: 0,
+        textAlign: "left",
+        transform: pressed ? "scale(0.98)" : "scale(1)",
+        transition: "transform 120ms ease-out",
+        animation: "v2-fade-in 400ms ease-out " + (index * 40) + "ms both",
+      }}
+    >
+      {heroImage && (
+        <img
+          src={heroImage}
+          alt=""
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9)" }}
+        />
+      )}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(180deg, rgba(15,17,26,0.15) 0%, rgba(15,17,26,0.4) 55%, rgba(15,17,26,0.95) 100%)",
+        }}
+      />
+      {isExclusive && (
+        <div
+          style={{
+            position: "absolute", top: 12, right: 12,
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
+            color: V2.gold,
+            padding: "4px 10px",
+            borderRadius: 9999,
+            background: "rgba(15, 17, 26, 0.7)",
+            border: "1px solid " + V2.goldBorder,
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          ✦ Members only
+        </div>
+      )}
+      <div style={{ position: "absolute", bottom: 16, left: 16, right: 16, color: V2.text }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor }} />
+          <span style={{ color: statusColor }}>{statusText}</span>
+        </div>
+        <div style={{ fontFamily: FONT.h, fontSize: 19, fontWeight: 600, marginBottom: 6, lineHeight: 1.2, letterSpacing: "-0.01em" }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 12, color: V2.textSecondary, lineHeight: 1.4 }}>
+          {venueName} · {dateTime}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function V2BottomNav({ view, setView, classic, hasUnscannedVoucher }) {
   // 5-tab bottom nav with centre Scan FAB (raised).
   // Mapping: Home → HOME · Rewards → REWARDS · [Scan] → WALLET (until S7 lands)
@@ -1369,7 +1613,7 @@ function V2BottomNav({ view, setView, classic, hasUnscannedVoucher }) {
 }
 
 // ─── S3: Home / Tier + Points Hero ───────────────────────────────────────
-function HomeV2({ member, transactions, vouchers, giftCards, tiers, rewards, setView, reload }) {
+function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, tiers, rewards, setView, reload }) {
   const tierId = member.tier || "silver";
   const tierInfo = TIER_INFO[tierId] || TIER_INFO.silver;
   const isSilver = tierId === "silver";
@@ -1379,6 +1623,16 @@ function HomeV2({ member, transactions, vouchers, giftCards, tiers, rewards, set
   const vouchersRemaining = member.vouchers_remaining != null ? member.vouchers_remaining : (tierInfo.vCount || 0);
   const stamps = member.stamps || 0;
   const individualVouchers = (vouchers || []).filter(v => v.status === "active" || v.status === "pending_scan").length;
+
+  // S4 data derivation
+  const now = Date.now();
+  const upcomingBookings = (bookings || [])
+    .filter(b => (b.status === "confirmed" || b.status === "pending") && new Date(b.starts_at).getTime() >= now - 2 * 3600 * 1000) // include in-progress
+    .slice(0, 10);
+  const visibleEvents = (events || [])
+    .filter(e => e.status === "open" || e.status === "waitlist")
+    .filter(e => v2EventVisibleToTier(e, tierId))
+    .slice(0, 10);
 
   const firstName = (member.name || "").split(" ")[0] || "there";
   const tierOrder = ["silver", "gold", "platinum", "corporate", "staff"];
@@ -1453,6 +1707,107 @@ function HomeV2({ member, transactions, vouchers, giftCards, tiers, rewards, set
           <div style={{ color: V2.gold, fontSize: 18, fontWeight: 600 }}>→</div>
         </div>
       )}
+
+      {/* ─── S4: Pay / Bookings / Events — stacked below the tier hero ─── */}
+      {/* Pay with the app card — routes to Wallet until S6/S7 land */}
+      <V2ActionCard
+        label="Pay with the app"
+        title="View and pay for your open tab"
+        caption="Scan, split, and earn points on every bill at any 1-Group venue"
+        pillLabel="View"
+        onClick={() => setView(VIEW.WALLET)}
+      />
+
+      {/* Upcoming bookings shelf */}
+      <div style={{ marginBottom: 24 }}>
+        <V2ShelfHeader
+          title="Upcoming bookings"
+          count={upcomingBookings.length > 0 ? upcomingBookings.length : null}
+          onSeeAll={upcomingBookings.length > 0 ? () => setView(VIEW.EXPLORE) : null}
+        />
+        {upcomingBookings.length > 0 ? (
+          <V2Shelf>
+            {upcomingBookings.map((b, i) => (
+              <V2BookingCard
+                key={b.id}
+                index={i}
+                thumbnail={b.thumbnail_url}
+                venueName={b.venue_name}
+                dateTime={v2FormatDateTime(b.starts_at) + (b.party_size ? " · table for " + b.party_size : "")}
+                location={b.location}
+                onClick={() => setView(VIEW.EXPLORE)}
+              />
+            ))}
+          </V2Shelf>
+        ) : (
+          <div
+            onClick={() => setView(VIEW.EXPLORE)}
+            style={{
+              padding: "20px 18px",
+              background: V2.card,
+              border: "1px dashed " + V2.dividerStrong,
+              borderRadius: 14,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, color: V2.text, marginBottom: 4 }}>
+                No upcoming bookings yet
+              </div>
+              <div style={{ fontSize: 12, color: V2.textMuted, lineHeight: 1.4 }}>
+                Explore 1-Group's 23 venues and secure your next reservation.
+              </div>
+            </div>
+            <div style={{ color: V2.gold, fontSize: 12, fontWeight: 600 }}>Explore →</div>
+          </div>
+        )}
+      </div>
+
+      {/* Events shelf */}
+      <div style={{ marginBottom: 24 }}>
+        <V2ShelfHeader
+          title="Events"
+          count={visibleEvents.length > 0 ? visibleEvents.length : null}
+          onSeeAll={visibleEvents.length > 0 ? () => setView(VIEW.EXPLORE) : null}
+        />
+        {visibleEvents.length > 0 ? (
+          <V2Shelf>
+            {visibleEvents.map((e, i) => (
+              <V2EventCard
+                key={e.id}
+                index={i}
+                heroImage={e.hero_image_url}
+                title={e.title}
+                venueName={e.venue_name}
+                dateTime={v2FormatDateTime(e.starts_at)}
+                status={e.status}
+                tierExclusive={e.tier_exclusive}
+                onClick={() => {
+                  if (e.booking_url) { window.open(e.booking_url, "_blank"); }
+                  else { setView(VIEW.EXPLORE); }
+                }}
+              />
+            ))}
+          </V2Shelf>
+        ) : (
+          <div
+            style={{
+              padding: "20px 18px",
+              background: V2.card,
+              border: "1px dashed " + V2.dividerStrong,
+              borderRadius: 14,
+              fontSize: 12, color: V2.textMuted, lineHeight: 1.5,
+            }}
+          >
+            No activations match your tier right now — check back soon for members-only sessions, tastings, and chef's table nights.
+          </div>
+        )}
+      </div>
+
+      {/* U06 GIFT CARDS SHELF GOES HERE — deliberately deferred.
+          Phase 2 U06 renders the Gift Cards surface at VIEW.GIFTCARDS; once a
+          V2 Gift Cards shelf lands, drop it in this slot. */}
 
       {/* Twin stat cards */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
@@ -1583,9 +1938,11 @@ export default function App() {
   const [giftCards, setGiftCards] = useState([]);
   const [tiers, setTiers] = useState([]);
   const [stores, setStores] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [events, setEvents] = useState([]);
 
   const loadMemberData = useCallback(async (memberId) => {
-    const [m, r, t, v, g, tiersList, storesList] = await Promise.all([
+    const [m, r, t, v, g, tiersList, storesList, bookingsList, eventsList] = await Promise.all([
       supaFetch("members?id=eq." + memberId),
       supaFetch("rewards?active=eq.true&order=id.asc"),
       supaFetch("transactions?member_id=eq." + memberId + "&order=created_at.desc&limit=20"),
@@ -1593,6 +1950,8 @@ export default function App() {
       supaFetch("gift_cards?purchaser_id=eq." + memberId + "&order=created_at.desc"),
       supaFetch("tiers?select=*&order=annual_fee.asc"),
       supaFetch("stores?status=eq.active&order=category.asc,name.asc"),
+      supaFetch("bookings?member_id=eq." + memberId + "&order=starts_at.asc&limit=20"),
+      supaFetch("events?status=eq.open&order=starts_at.asc&limit=20"),
     ]);
     if (Array.isArray(m) && m[0]) setMember(m[0]);
     if (Array.isArray(r)) setRewards(r);
@@ -1601,6 +1960,8 @@ export default function App() {
     if (Array.isArray(g)) setGiftCards(g);
     if (Array.isArray(tiersList)) setTiers(tiersList);
     if (Array.isArray(storesList)) setStores(storesList);
+    if (Array.isArray(bookingsList)) setBookings(bookingsList);
+    if (Array.isArray(eventsList)) setEvents(eventsList);
   }, []);
 
   const signOut = () => { setMember(null); setView(VIEW.LANDING); };
@@ -1673,7 +2034,7 @@ export default function App() {
       )}
       {view === VIEW.HOME && member && (classic
         ? <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />
-        : <HomeV2 member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} tiers={tiers} rewards={rewards} setView={setView} reload={() => loadMemberData(member.id)} />
+        : <HomeV2 member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} bookings={bookings} events={events} tiers={tiers} rewards={rewards} setView={setView} reload={() => loadMemberData(member.id)} />
       )}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
