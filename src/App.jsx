@@ -698,12 +698,16 @@ function LandingV2({ onSignIn }) {
 // 6-digit OTP resolves via Supabase member lookup (by email if possible,
 // otherwise Sophia Chen M0001 — identical to the Phase 2 U14 mock).
 function SignInV2({ onSuccess, onBack }) {
-  const [panel, setPanel] = useState(0); // 0 = brand, 1 = login, 2 = verify
+  // Panel 0 (brand moment) removed per feedback — direct-to-login flow.
+  // Panel 1 = Login; Panel 2 = OTP verify.
+  const [panel, setPanel] = useState(1);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(30);
+  const [expandedTier, setExpandedTier] = useState(null);
+  const [sheetParent, setSheetParent] = useState(null);
 
   useEffect(() => {
     if (panel !== 2) return;
@@ -748,69 +752,16 @@ function SignInV2({ onSuccess, onBack }) {
       <V2Styles />
       <V2Badge />
 
-      {/* PANEL A — Brand moment */}
-      {panel === 0 && (
-        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
-          {/* Gold streak left rail */}
-          <div
-            aria-hidden
-            style={{
-              position: "absolute", top: 0, bottom: 0, left: 0, width: "30%",
-              background: "linear-gradient(90deg, rgba(245, 215, 166, 0.25) 0%, transparent 100%)",
-              mixBlendMode: "screen",
-              pointerEvents: "none",
-            }}
-          />
-          <div
-            style={{
-              position: "relative", zIndex: 2,
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              minHeight: "100vh", padding: "60px 24px 120px", textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.3em", textTransform: "uppercase", color: V2.gold, marginBottom: 20, fontFamily: FONT.b }}>
-              ✦ 1-Group Singapore
-            </div>
-            <div style={{ fontFamily: FONT.h, fontSize: 56, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 24 }}>
-              INSIDER
-            </div>
-            <div style={{ fontFamily: FONT.b, fontSize: 14, color: V2.textSecondary, maxWidth: 300, lineHeight: 1.5 }}>
-              Your gateway to twenty three unique venues.
-            </div>
-          </div>
-
-          <div style={{ position: "fixed", bottom: "calc(40px + env(safe-area-inset-bottom))", right: 24, zIndex: 3 }}>
-            <V2GoldFAB onClick={() => setPanel(1)} ariaLabel="Continue">→</V2GoldFAB>
-          </div>
-          <div style={{ position: "fixed", bottom: "calc(52px + env(safe-area-inset-bottom))", left: 24, zIndex: 3 }}>
-            <div onClick={onBack} style={{ fontFamily: FONT.b, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}>
-              ← Back
-            </div>
-          </div>
-
-          <div
-            style={{
-              position: "fixed", bottom: 16, left: 0, right: 0,
-              textAlign: "center",
-              fontSize: 10, color: V2.textMuted,
-              padding: "0 24px",
-              lineHeight: 1.5,
-            }}
-          >
-            By continuing, you agree to our <span style={{ color: V2.gold }}>Terms</span> and <span style={{ color: V2.gold }}>Privacy Policy</span>.
-          </div>
-        </div>
-      )}
+      {/* PANEL A (Brand moment) removed — Landing → Login direct.
+          Existing panel constants kept as 1 and 2 for OTP flow. */}
 
       {/* PANEL B — Login */}
       {panel === 1 && (
-        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)", overflowY: "auto" }}>
           <div
             style={{
               minHeight: "100vh",
-              padding: "60px 24px 40px",
-              display: "flex", flexDirection: "column", justifyContent: "center",
+              padding: "60px 24px 60px",
               maxWidth: 480, margin: "0 auto",
             }}
           >
@@ -928,12 +879,150 @@ function SignInV2({ onSuccess, onBack }) {
             </V2GlassPanel>
 
             <div
-              onClick={() => setPanel(0)}
+              onClick={onBack}
               style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
             >
               ← Back
             </div>
+
+            {/* ─── Choose Your Tier — expandable cards below login ───
+                Preserved from classic Landing; tier gradients already
+                render well on V2 dark bg so reused directly. */}
+            <div style={{ marginTop: 48 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 8, textAlign: "center" }}>
+                ✦ Membership
+              </div>
+              <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text, marginBottom: 6, textAlign: "center" }}>
+                Choose your tier
+              </div>
+              <div style={{ fontSize: 12, color: V2.textMuted, textAlign: "center", marginBottom: 18 }}>
+                Tap any tier to explore full benefits
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {["silver", "gold", "platinum", "corporate"].map(tierId => {
+                  const info = TIER_INFO[tierId];
+                  const isExpanded = expandedTier === tierId;
+                  const gradient = V2_TIER_GRADIENTS[tierId];
+                  const ink = V2_TIER_INK[tierId];
+                  const isEnquire = tierId === "corporate";
+                  return (
+                    <div
+                      key={tierId}
+                      style={{
+                        position: "relative",
+                        background: gradient,
+                        borderRadius: 16,
+                        color: ink,
+                        overflow: "hidden",
+                        boxShadow: isExpanded ? "0 0 32px rgba(245, 215, 166, 0.2), 0 12px 32px rgba(0, 0, 0, 0.4)" : "0 8px 24px rgba(0, 0, 0, 0.25)",
+                        border: isExpanded ? "1px solid " + V2.goldBorder : "1px solid transparent",
+                        transition: "box-shadow .25s, border-color .25s",
+                      }}
+                    >
+                      <div
+                        onClick={() => setExpandedTier(isExpanded ? null : tierId)}
+                        style={{ padding: 20, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>
+                            {tierId === "silver" ? "✧" : tierId === "gold" ? "★" : tierId === "platinum" ? "◆" : "◈"} {info.name}
+                          </div>
+                          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                            {info.earn} · {info.bday} birthday
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", marginLeft: 10 }}>
+                          <div style={{ fontFamily: FONT.h, fontSize: 17, fontWeight: 700 }}>{info.fee}</div>
+                          <div
+                            style={{
+                              fontSize: 17, marginTop: 4, opacity: 0.75,
+                              transition: "transform .25s",
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                            }}
+                          >▾</div>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div
+                          style={{
+                            padding: "0 20px 20px 20px",
+                            borderTop: "1px solid rgba(255,255,255,0.15)",
+                            animation: "v2-fade-in 300ms ease-out",
+                          }}
+                        >
+                          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", fontWeight: 600, opacity: 0.75, marginTop: 14, marginBottom: 10 }}>
+                            {isEnquire ? "Full entitlements" : "Your benefits"}
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {info.benefits.map((b, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                                <div style={{ color: ink, fontSize: 11, lineHeight: "18px", opacity: 0.8 }}>✦</div>
+                                <div style={{ flex: 1, fontSize: 12.5, lineHeight: 1.5, opacity: 0.95 }}>{b}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isEnquire) {
+                                // Corporate enquiry opens the Phase 2 classic modal in classic mode;
+                                // in V2 fall back to a mailto for now.
+                                window.location.href = "mailto:corporate@1-group.sg?subject=Corporate%20Membership%20Enquiry";
+                              } else {
+                                // Tap scrolls to top of login panel so they can fill the email
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }
+                            }}
+                            style={{
+                              width: "100%", marginTop: 16,
+                              padding: "12px 20px",
+                              background: "rgba(255, 255, 255, 0.92)",
+                              color: "#1A1D27",
+                              border: "none", borderRadius: 10,
+                              fontSize: 13, fontWeight: 700, cursor: "pointer",
+                              fontFamily: FONT.b, letterSpacing: "0.02em",
+                            }}
+                          >
+                            {isEnquire ? "Write in about Corporate Membership →" : "Log in to join " + info.name + " →"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ─── Our Venues — using S5 V2VenueRow + sub-brand sheet ─── */}
+            <div style={{ marginTop: 48 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 8, textAlign: "center" }}>
+                ✦ Our Venues
+              </div>
+              <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text, marginBottom: 6, textAlign: "center" }}>
+                {VENUE_DIRECTORY.length} parent venues
+              </div>
+              <div style={{ fontSize: 12, color: V2.textMuted, textAlign: "center", marginBottom: 18 }}>
+                Singapore & Malaysia · tap a venue to discover its concepts
+              </div>
+
+              {VENUE_DIRECTORY.map((parent, i) => (
+                <V2VenueRow
+                  key={parent.name}
+                  index={i}
+                  parent={parent}
+                  onClick={() => setSheetParent(parent)}
+                />
+              ))}
+            </div>
           </div>
+
+          {/* Sub-brand sheet — reuses S5 component */}
+          {sheetParent && (
+            <V2SubBrandSheet parent={sheetParent} onClose={() => setSheetParent(null)} />
+          )}
         </div>
       )}
 
