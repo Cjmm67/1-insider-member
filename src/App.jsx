@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 
 // ─── Supabase ───
 const SUPA_URL = "https://tobtmtshxgpkkucsaxyk.supabase.co";
@@ -1928,6 +1928,502 @@ function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, t
 }
 
 
+// ─── S5: Venues / Explore Outlets — helpers & data ────────────────────────
+
+// Adapted from the Phase 3 skill's venue-journeys.json, with stops resolved
+// to parent names that exist in VENUE_DIRECTORY (the single source of truth).
+// Sub-level deep links (e.g. Oumi, Kaarla) are referenced in desc copy only;
+// taps land on the parent page.
+const V2_JOURNEYS = [
+  {
+    id: "rooftop",
+    name: "Rooftop journey",
+    icon: "✦",
+    tagline: "Three altitudes, one night",
+    desc: "Sunset cocktails at 1-Atico. Skyline dinner at 1-Arden. Late Spanish wines at 1-Alfaro.",
+    stops: ["1-Atico", "1-Arden", "1-Alfaro"],
+    tierAccess: null,
+  },
+  {
+    id: "capitaspring-51",
+    name: "51st floor tasting",
+    icon: "☁",
+    tagline: "A progressive dinner at Level 51",
+    desc: "Japanese omakase at Oumi, Modern Australian at Kaarla, Mediterranean at Sol & Luna — all under the 1-Arden roof at CapitaSpring.",
+    stops: ["1-Arden"],
+    tierAccess: ["gold", "platinum", "corporate"],
+  },
+  {
+    id: "garden-heritage",
+    name: "Garden heritage",
+    icon: "◐",
+    tagline: "Colonial mansions & botanical calm",
+    desc: "Heritage dining at The Alkaff Mansion, then Botanico and Wildseed at The Summer House.",
+    stops: ["The Alkaff Mansion", "The Summer House"],
+    tierAccess: null,
+  },
+  {
+    id: "river-to-flame",
+    name: "River to flame",
+    icon: "◈",
+    tagline: "Riverfront cocktails, rooftop fire",
+    desc: "1918 by the water at The River House, then up to Flnt at 1-Atico for flame-fired dining.",
+    stops: ["The River House", "1-Atico"],
+    tierAccess: null,
+  },
+  {
+    id: "wildseed-crawl",
+    name: "Wildseed stamp run",
+    icon: "◇",
+    tagline: "Four Wildseed Cafés in a day",
+    desc: "Collect a stamp at each — 1-Flowerhill, The Alkaff Mansion, The Summer House, The Garage.",
+    stops: ["1-Flowerhill", "The Alkaff Mansion", "The Summer House", "The Garage"],
+    tierAccess: null,
+  },
+];
+
+const V2_LOCATION_CLUSTERS = [
+  { name: "CapitaSpring · Raffles Place", venues: ["1-Arden", "1-Atico", "1-Alfaro"] },
+  { name: "Fullerton rooftop",             venues: ["1-Altitude Coast"] },
+  { name: "Botanic Gardens & mansions",    venues: ["The Summer House", "The Alkaff Mansion", "The Garage"] },
+  { name: "Riverside",                     venues: ["The River House", "Monti"] },
+  { name: "1-Flowerhill",                  venues: ["1-Flowerhill"] },
+  { name: "Malaysia",                      venues: ["1-Altitude Melaka"] },
+];
+
+// Lightweight keyword-based category inference on parent sub-brands.
+const v2VenueMatchesCategory = (parent, cat) => {
+  if (cat === "all") return true;
+  const subs = parent.subs || [];
+  if (cat === "cafes") return subs.some(s => /caf[eé]/i.test(s.name));
+  if (cat === "bars") return subs.some(s => /(\bbar\b|1918|sky dining|lounge)/i.test(s.name));
+  if (cat === "restaurants") return subs.some(s => !/caf[eé]|\bbar\b|1918|lounge|sky dining/i.test(s.name));
+  return true;
+};
+
+const v2LookupParent = (name) => VENUE_DIRECTORY.find(p => p.name === name) || null;
+
+// ─── S5: Venues / Explore Outlets ─────────────────────────────────────────
+function ExploreOutletsV2({ member, setView }) {
+  const tierId = member.tier || "silver";
+  const [mode, setMode] = useState("category"); // 'category' | 'journey' | 'location'
+  const [catFilter, setCatFilter] = useState("all");
+  const [sheetParent, setSheetParent] = useState(null); // parent object for sub-brand sheet
+
+  const visibleParents = VENUE_DIRECTORY.filter(p => v2VenueMatchesCategory(p, catFilter));
+
+  const totalSubs = VENUE_DIRECTORY.reduce((a, p) => a + (p.subs || []).length, 0);
+
+  return (
+    <div
+      style={{
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        minHeight: "100vh",
+        padding: "24px 20px 100px",
+        animation: "v2-fade-in 400ms ease-out",
+      }}
+    >
+      <V2Styles />
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textMuted, marginBottom: 6 }}>
+          ✦ Our Venues
+        </div>
+        <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text, marginBottom: 8, lineHeight: 1.1 }}>
+          {VENUE_DIRECTORY.length} parent venues · {totalSubs} dining concepts
+        </div>
+        <div style={{ fontSize: 13, color: V2.textSecondary, lineHeight: 1.5 }}>
+          Tap any venue to discover its restaurants, bars, and cafés.
+        </div>
+      </div>
+
+      {/* Three-state toggle */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+        <V2PillToggle
+          options={[
+            { key: "category", label: "Category" },
+            { key: "journey",  label: "Journey"  },
+            { key: "location", label: "Location" },
+          ]}
+          activeKey={mode}
+          onChange={setMode}
+        />
+      </div>
+
+      {/* MODE: CATEGORY */}
+      {mode === "category" && (
+        <>
+          {/* Category chips */}
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 16, scrollbarWidth: "none" }}>
+            {[
+              { k: "all",         label: "All",         count: VENUE_DIRECTORY.length },
+              { k: "restaurants", label: "Restaurants", count: VENUE_DIRECTORY.filter(p => v2VenueMatchesCategory(p, "restaurants")).length },
+              { k: "bars",        label: "Bars",        count: VENUE_DIRECTORY.filter(p => v2VenueMatchesCategory(p, "bars")).length },
+              { k: "cafes",       label: "Cafés",       count: VENUE_DIRECTORY.filter(p => v2VenueMatchesCategory(p, "cafes")).length },
+            ].map(c => (
+              <button
+                key={c.k}
+                onClick={() => setCatFilter(c.k)}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: 9999,
+                  border: "1px solid " + (catFilter === c.k ? V2.goldBorder : V2.divider),
+                  background: catFilter === c.k ? "rgba(245, 215, 166, 0.1)" : "transparent",
+                  color: catFilter === c.k ? V2.gold : V2.textSecondary,
+                  fontFamily: FONT.b,
+                  fontSize: 12, fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                {c.label} <span style={{ opacity: 0.5, marginLeft: 4 }}>{c.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Venue rows */}
+          <div>
+            {visibleParents.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", color: V2.textMuted, fontSize: 13 }}>
+                No venues match this category.
+              </div>
+            ) : (
+              visibleParents.map((parent, i) => (
+                <V2VenueRow
+                  key={parent.name}
+                  index={i}
+                  parent={parent}
+                  onClick={() => setSheetParent(parent)}
+                />
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      {/* MODE: JOURNEY */}
+      {mode === "journey" && (
+        <div>
+          {V2_JOURNEYS.map((j, i) => {
+            const locked = j.tierAccess && !j.tierAccess.includes(tierId);
+            return (
+              <V2JourneyCard
+                key={j.id}
+                index={i}
+                journey={j}
+                locked={locked}
+                onTapVenue={(parentName) => {
+                  const p = v2LookupParent(parentName);
+                  if (p) setSheetParent(p);
+                }}
+                onTapUpgrade={() => setView(VIEW.PROFILE)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODE: LOCATION */}
+      {mode === "location" && (
+        <div>
+          {V2_LOCATION_CLUSTERS.map((cluster, ci) => (
+            <div key={cluster.name} style={{ marginBottom: 24, animation: "v2-fade-in 400ms ease-out " + (ci * 50) + "ms both" }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 10, paddingLeft: 4 }}>
+                {cluster.name}
+              </div>
+              {cluster.venues.map((vName, vi) => {
+                const parent = v2LookupParent(vName);
+                if (!parent) return null;
+                return (
+                  <V2VenueRow
+                    key={vName}
+                    index={vi}
+                    parent={parent}
+                    onClick={() => setSheetParent(parent)}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sub-brand slide-up sheet */}
+      {sheetParent && (
+        <V2SubBrandSheet parent={sheetParent} onClose={() => setSheetParent(null)} />
+      )}
+    </div>
+  );
+}
+
+function V2VenueRow({ parent, onClick, index }) {
+  const [pressed, setPressed] = useState(false);
+  const subCount = (parent.subs || []).length;
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        width: "100%",
+        padding: 10,
+        background: V2.card,
+        border: "1px solid " + V2.divider,
+        borderRadius: 14,
+        cursor: "pointer",
+        textAlign: "left",
+        marginBottom: 10,
+        transform: pressed ? "scale(0.99)" : "scale(1)",
+        transition: "transform 120ms ease-out, border-color 200ms",
+        animation: "v2-fade-in 400ms ease-out " + (index * 30) + "ms both",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = V2.goldBorder; }}
+    >
+      <div style={{ width: 88, height: 66, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: V2.elevated }}>
+        {parent.thumbnail && (
+          <img src={parent.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9)" }} />
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: FONT.h, fontSize: 17, fontWeight: 600, color: V2.text, marginBottom: 3, lineHeight: 1.2 }}>
+          {parent.name}
+        </div>
+        <div style={{ fontSize: 11, color: V2.textMuted }}>
+          {subCount > 0 ? "Discover " + subCount + " concept" + (subCount === 1 ? "" : "s") : "Visit venue"}
+        </div>
+      </div>
+      <div style={{ color: V2.textMuted, fontSize: 18, paddingRight: 6 }}>›</div>
+    </button>
+  );
+}
+
+function V2JourneyCard({ journey, locked, onTapVenue, onTapUpgrade, index }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        padding: 20,
+        background: V2.card,
+        border: "1px solid " + (locked ? V2.divider : V2.goldBorder),
+        borderRadius: 16,
+        marginBottom: 14,
+        opacity: locked ? 0.85 : 1,
+        overflow: "hidden",
+        animation: "v2-fade-in 400ms ease-out " + (index * 40) + "ms both",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10, gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 6 }}>
+            {journey.icon} {journey.tagline}
+          </div>
+          <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 600, color: V2.text, lineHeight: 1.2, letterSpacing: "-0.01em", marginBottom: 6 }}>
+            {journey.name}
+          </div>
+          <div style={{ fontSize: 12, color: V2.textSecondary, lineHeight: 1.5 }}>
+            {journey.desc}
+          </div>
+        </div>
+        {locked && (
+          <div
+            style={{
+              flexShrink: 0,
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
+              color: V2.gold,
+              padding: "4px 10px",
+              borderRadius: 9999,
+              border: "1px solid " + V2.goldBorder,
+            }}
+          >
+            ✦ Gold+
+          </div>
+        )}
+      </div>
+
+      {/* Stop chips with gold arrow connectors */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 14 }}>
+        {journey.stops.map((stopName, si) => (
+          <Fragment key={stopName + si}>
+            <button
+              onClick={() => !locked && onTapVenue(stopName)}
+              disabled={locked}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 9999,
+                background: V2.elevated,
+                border: "1px solid " + V2.divider,
+                color: V2.text,
+                fontSize: 12, fontWeight: 600,
+                cursor: locked ? "not-allowed" : "pointer",
+                fontFamily: FONT.b,
+              }}
+            >
+              {stopName}
+            </button>
+            {si < journey.stops.length - 1 && (
+              <span style={{ color: V2.gold, fontSize: 14, fontWeight: 600 }}>→</span>
+            )}
+          </Fragment>
+        ))}
+      </div>
+
+      {locked && (
+        <div
+          onClick={onTapUpgrade}
+          style={{
+            marginTop: 14,
+            padding: "8px 14px",
+            borderRadius: 9999,
+            background: "rgba(245, 215, 166, 0.1)",
+            border: "1px solid " + V2.goldBorder,
+            color: V2.gold,
+            fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+            textAlign: "center",
+            cursor: "pointer",
+          }}
+        >
+          Upgrade to Gold to unlock this journey →
+        </div>
+      )}
+    </div>
+  );
+}
+
+function V2SubBrandSheet({ parent, onClose }) {
+  const subs = parent.subs || [];
+  return (
+    <>
+      {/* Scrim */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0,
+          background: "rgba(15, 17, 26, 0.6)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
+          zIndex: 200,
+          animation: "v2-fade-in 220ms ease-out",
+        }}
+      />
+      {/* Sheet */}
+      <div
+        style={{
+          position: "fixed", bottom: 0, left: "50%",
+          transform: "translateX(-50%)",
+          width: "100%", maxWidth: 480,
+          background: V2.card,
+          borderTop: "1px solid " + V2.goldBorder,
+          borderRadius: "24px 24px 0 0",
+          boxShadow: "0 -20px 48px rgba(0, 0, 0, 0.5)",
+          zIndex: 201,
+          animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          maxHeight: "85vh",
+          overflowY: "auto",
+        }}
+      >
+        {/* Hero */}
+        <div style={{ position: "relative", width: "100%", height: 160, overflow: "hidden", borderRadius: "24px 24px 0 0" }}>
+          {parent.thumbnail && (
+            <img
+              src={parent.thumbnail}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9)" }}
+            />
+          )}
+          <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(15,17,26,0.2) 0%, rgba(15,17,26,0.85) 100%)" }} />
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              position: "absolute", top: 12, right: 12,
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(15, 17, 26, 0.7)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              border: "1px solid " + V2.divider,
+              color: V2.text, fontSize: 18, cursor: "pointer", fontFamily: FONT.b,
+            }}
+          >×</button>
+          <div style={{ position: "absolute", bottom: 14, left: 18, right: 18, color: V2.text }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 4 }}>
+              ✦ Parent venue
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 24, fontWeight: 600, letterSpacing: "-0.01em" }}>
+              {parent.name}
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 20px 28px" }}>
+          <a
+            href={parent.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "block",
+              padding: "14px 16px",
+              background: V2.gold,
+              color: V2.textOnGold,
+              border: "none",
+              borderRadius: 10,
+              fontSize: 14, fontWeight: 600, letterSpacing: "0.02em",
+              textAlign: "center",
+              textDecoration: "none",
+              fontFamily: FONT.b,
+              marginBottom: 20,
+            }}
+          >
+            Visit {parent.name} website ↗
+          </a>
+
+          {subs.length > 0 && (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 10 }}>
+                Concepts at this venue
+              </div>
+              {subs.map((sub, i) => (
+                <a
+                  key={sub.name + i}
+                  href={sub.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "14px 16px",
+                    background: V2.elevated,
+                    border: "1px solid " + V2.divider,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                    textDecoration: "none",
+                    color: V2.text,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: V2.text }}>{sub.name}</div>
+                    <div style={{ fontSize: 10, fontFamily: FONT.m, color: V2.textMuted, marginTop: 2, letterSpacing: "0.02em" }}>
+                      {sub.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    </div>
+                  </div>
+                  <div style={{ color: V2.gold, fontSize: 14 }}>↗</div>
+                </a>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+
 export default function App() {
   const classic = useClassicMode();
   const [view, setView] = useState(VIEW.LANDING);
@@ -1992,7 +2488,7 @@ export default function App() {
         "* { box-sizing: border-box; margin: 0; padding: 0; }"
       }</style>
 
-      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && (
+      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && (
         <div style={s.header}>
           <div style={s.logo}>✦ 1-INSIDER</div>
           {member && (
@@ -2041,7 +2537,10 @@ export default function App() {
       {view === VIEW.PROFILE && member && <Profile member={member} tiers={tiers} signOut={signOut} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.WALLET && member && <Wallet member={member} vouchers={vouchers} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.GIFTCARDS && member && <GiftCards member={member} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
-      {view === VIEW.EXPLORE && member && <ExploreOutlets member={member} stores={stores} setView={setView} />}
+      {view === VIEW.EXPLORE && member && (classic
+        ? <ExploreOutlets member={member} stores={stores} setView={setView} />
+        : <ExploreOutletsV2 member={member} setView={setView} />
+      )}
       {view === VIEW.HISTORY && member && <HistoryView member={member} setView={setView} />}
 
       {member && view >= VIEW.HOME && (classic ? (
