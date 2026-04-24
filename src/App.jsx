@@ -516,10 +516,31 @@ function V2OtpInput({ value, onChange, length }) {
 // the static image anyway).
 function LandingV2({ onSignIn }) {
   const [idle, setIdle] = useState(false);
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  // Marquee venues from VENUE_DIRECTORY — the hero compilation rotates
+  // through these until a proper /public/landing-hero.mp4 is uploaded.
+  const heroImages = [
+    VENUE_DIRECTORY.find(v => v.name === "1-Arden")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "1-Alfaro")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "1-Atico")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "The River House")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "The Alkaff Mansion")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "The Summer House")?.thumbnail,
+  ].filter(Boolean);
+
   useEffect(() => {
     const t = setTimeout(() => setIdle(true), 6000);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (heroImages.length < 2) return;
+    const t = setInterval(() => {
+      setHeroIndex(i => (i + 1) % heroImages.length);
+    }, 4500);
+    return () => clearInterval(t);
+  }, [heroImages.length]);
 
   return (
     <div
@@ -533,20 +554,31 @@ function LandingV2({ onSignIn }) {
       }}
     >
       <V2Styles />
+      <style>{
+        "@keyframes v2-kenburns { 0% { transform: scale(1.05); } 100% { transform: scale(1.15); } }"
+      }</style>
       <V2Badge />
 
-      {/* Hero still — reuses the River House heritage crop until a video is uploaded. */}
-      <img
-        src="/venues/river-house.jpg"
-        alt=""
-        style={{
-          position: "absolute", inset: 0,
-          width: "100%", height: "100%",
-          objectFit: "cover",
-          animation: "v2-fade-in 400ms ease-out",
-          filter: "saturate(0.85) contrast(1.05)",
-        }}
-      />
+      {/* Hero compilation — crossfades between VENUE_DIRECTORY marquee thumbnails
+          every 4.5s with a slow Ken Burns zoom. Replace with a single <video> once
+          /public/landing-hero.mp4 is uploaded. */}
+      {heroImages.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          style={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            objectFit: "cover",
+            opacity: i === heroIndex ? 1 : 0,
+            transition: "opacity 1200ms ease-in-out",
+            filter: "saturate(0.85) contrast(1.05)",
+            animation: i === heroIndex ? "v2-kenburns 6s ease-out forwards" : "none",
+            transformOrigin: ["center center", "top left", "top right", "bottom left", "bottom right", "center top"][i % 6],
+          }}
+        />
+      ))}
 
       {/* Gold streak on left rail */}
       <div
@@ -613,7 +645,7 @@ function LandingV2({ onSignIn }) {
             lineHeight: 1.5,
           }}
         >
-          A members-only gateway to 1-Group Singapore — twenty-three venues, one private world.
+          Your gateway to twenty three unique venues.
         </div>
       </div>
 
@@ -744,7 +776,7 @@ function SignInV2({ onSuccess, onBack }) {
               INSIDER
             </div>
             <div style={{ fontFamily: FONT.b, fontSize: 14, color: V2.textSecondary, maxWidth: 300, lineHeight: 1.5 }}>
-              Your gateway to twenty-three private venues.
+              Your gateway to twenty three unique venues.
             </div>
           </div>
 
