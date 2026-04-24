@@ -426,8 +426,18 @@ function V2GlassPanel({ children, style }) {
 }
 
 // Dark-surface text input.
-function V2TextInput({ label, value, onChange, type, placeholder, autoFocus }) {
+function V2TextInput({ label, value, onChange, type, placeholder, autoFocus, id, pulse }) {
   const [focused, setFocused] = useState(false);
+  const [pulsing, setPulsing] = useState(false);
+
+  // When the parent bumps the pulse counter, fire a 700ms gold glow.
+  useEffect(() => {
+    if (pulse == null || pulse === 0) return;
+    setPulsing(true);
+    const t = setTimeout(() => setPulsing(false), 700);
+    return () => clearTimeout(t);
+  }, [pulse]);
+
   return (
     <div style={{ marginBottom: 16 }}>
       {label && (
@@ -436,6 +446,7 @@ function V2TextInput({ label, value, onChange, type, placeholder, autoFocus }) {
         </div>
       )}
       <input
+        id={id}
         value={value || ""}
         onChange={e => onChange(e.target.value)}
         type={type || "text"}
@@ -446,7 +457,7 @@ function V2TextInput({ label, value, onChange, type, placeholder, autoFocus }) {
         style={{
           width: "100%",
           background: V2.elevated,
-          border: "1px solid " + (focused ? V2.goldBorder : V2.divider),
+          border: "1px solid " + ((focused || pulsing) ? V2.goldBorder : V2.divider),
           borderRadius: 10,
           padding: "14px 16px",
           color: V2.text,
@@ -454,7 +465,8 @@ function V2TextInput({ label, value, onChange, type, placeholder, autoFocus }) {
           fontSize: 15,
           outline: "none",
           boxSizing: "border-box",
-          transition: "border-color 200ms ease-out",
+          transition: "border-color 200ms ease-out, box-shadow 400ms ease-out",
+          boxShadow: pulsing ? "0 0 0 3px rgba(245, 215, 166, 0.25), 0 0 24px rgba(245, 215, 166, 0.35)" : "none",
         }}
       />
     </div>
@@ -911,14 +923,39 @@ function SignInV2({ onSuccess, onBack }) {
   const [sheetParent, setSheetParent] = useState(null);
   const [showCorporate, setShowCorporate] = useState(false);
   const [exiting, setExiting] = useState(false);
+  const [panel2Exiting, setPanel2Exiting] = useState(false);
+  const [emailPulse, setEmailPulse] = useState(0);
 
-  // Reverse slide-down: trigger exit animation then call parent's onBack.
-  // Symmetric with the entrance (520ms slide-up), but exits at the motion
-  // spec's 220ms — 'things leave quickly' per the skill's governing principle.
+  // Reverse slide-down on Back — symmetric exit, 240ms per motion spec.
   const handleBack = () => {
     if (exiting) return;
     setExiting(true);
     setTimeout(() => onBack(), 240);
+  };
+
+  // Panel 2 → Panel 1 reverse slide — same 240ms exit easing.
+  const handleChangeEmail = () => {
+    if (panel2Exiting) return;
+    setPanel2Exiting(true);
+    setTimeout(() => {
+      setPanel(1);
+      setOtp("");
+      setError("");
+      setPanel2Exiting(false);
+    }, 240);
+  };
+
+  // Called from tier-card CTAs — scrolls back to top, focuses the email
+  // input, and fires a gold pulse highlight so the member knows where
+  // to complete their sign-up.
+  const focusEmail = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Wait for scroll; then focus + pulse.
+    setTimeout(() => {
+      const el = document.getElementById("v2-email-input");
+      if (el) el.focus();
+      setEmailPulse(p => p + 1);
+    }, 320);
   };
 
   useEffect(() => {
@@ -1045,12 +1082,14 @@ function SignInV2({ onSuccess, onBack }) {
               </div>
 
               <V2TextInput
+                id="v2-email-input"
                 label="Your email"
                 value={email}
                 onChange={setEmail}
                 type="email"
                 placeholder="member@insider.com"
                 autoFocus
+                pulse={emailPulse}
               />
 
               {/* Eber L03 demo notice */}
@@ -1131,7 +1170,7 @@ function SignInV2({ onSuccess, onBack }) {
               </div>
 
               <div style={{ textAlign: "center", fontSize: 12, color: V2.textSecondary }}>
-                I'm a new user. <span style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Sign Up</span>
+                I'm a new user. <span onClick={proceedToVerify} style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Sign Up</span>
               </div>
             </V2GlassPanel>
 
@@ -1227,8 +1266,7 @@ function SignInV2({ onSuccess, onBack }) {
                               if (isEnquire) {
                                 setShowCorporate(true);
                               } else {
-                                // Tap scrolls to top of login panel so they can fill the email
-                                window.scrollTo({ top: 0, behavior: "smooth" });
+                                focusEmail();
                               }
                             }}
                             style={{
@@ -1282,9 +1320,16 @@ function SignInV2({ onSuccess, onBack }) {
         </>
       )}
 
-      {/* PANEL C — Verify */}
+      {/* PANEL C — Verify. Slides up on enter, slides down on 'Change email'. */}
       {panel === 2 && (
-        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+        <div
+          style={{
+            ...panelBase,
+            animation: panel2Exiting
+              ? "v2-slide-down 240ms cubic-bezier(0.4, 0, 1, 1) forwards"
+              : "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+          }}
+        >
           <div
             style={{
               minHeight: "100vh",
@@ -1343,18 +1388,21 @@ function SignInV2({ onSuccess, onBack }) {
             </V2GlassPanel>
 
             <div
-              onClick={() => { setPanel(1); setOtp(""); setError(""); }}
+              onClick={handleChangeEmail}
               style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
             >
               ← Change email
             </div>
 
             <div style={{ textAlign: "center", marginTop: 10, fontSize: 10, color: V2.textMuted, letterSpacing: "0.15em", textTransform: "uppercase" }}>
-              Page 3 of 3 · ● ● ●
+              Page 2 of 2 · ● ●
             </div>
           </div>
         </div>
       )}
+
+      {/* Corporate Enquiry Modal — opened from Corporate tier card CTA */}
+      {showCorporate && <V2CorporateEnquiryModal onClose={() => setShowCorporate(false)} />}
     </>
   );
 }
