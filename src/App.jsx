@@ -514,7 +514,7 @@ function V2OtpInput({ value, onChange, length }) {
 // video hero. Until then, a dark still using the River House heritage image
 // renders as the fallback (preserves Eber L12 workaround: mobile always sees
 // the static image anyway).
-function LandingV2({ onSignIn }) {
+function LandingV2({ onSignIn, dimmed }) {
   const [idle, setIdle] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
 
@@ -550,14 +550,17 @@ function LandingV2({ onSignIn }) {
         color: V2.text,
         fontFamily: FONT.b,
         overflow: "hidden",
-        zIndex: 100,
+        zIndex: dimmed ? 50 : 100,
+        filter: dimmed ? "brightness(0.65) saturate(0.85)" : "none",
+        transition: "filter 520ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        pointerEvents: dimmed ? "none" : "auto",
       }}
     >
       <V2Styles />
       <style>{
         "@keyframes v2-kenburns { 0% { transform: scale(1.05); } 100% { transform: scale(1.15); } }"
       }</style>
-      <V2Badge />
+      {!dimmed && <V2Badge />}
 
       {/* Hero compilation — crossfades between VENUE_DIRECTORY marquee thumbnails
           every 4.5s with a slow Ken Burns zoom. Replace with a single <video> once
@@ -755,9 +758,50 @@ function SignInV2({ onSuccess, onBack }) {
       {/* PANEL A (Brand moment) removed — Landing → Login direct.
           Existing panel constants kept as 1 and 2 for OTP flow. */}
 
-      {/* PANEL B — Login */}
+      {/* PANEL B — Login. Slides up from below the viewport over the
+          LandingV2 cinematic. Three animated layers:
+          1. A soft scrim that fades in behind the panel (deepens the
+             landing into a "stage" state as the curtain rises).
+          2. The panel itself (v2-slide-up, 420ms cubic-bezier back-ease).
+          3. A gold leading edge hairline on the panel's top, catching the
+             eye as it crests over the landing (follows the skill's
+             motion.md Section 2 — insider-slide-up + shimmer overlay). */}
       {panel === 1 && (
-        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)", overflowY: "auto" }}>
+        <>
+          {/* Scrim fade-in behind the rising panel */}
+          <div
+            aria-hidden
+            style={{
+              position: "fixed", inset: 0,
+              background: "rgba(11, 13, 20, 0.55)",
+              backdropFilter: "blur(2px)",
+              WebkitBackdropFilter: "blur(2px)",
+              zIndex: 100,
+              pointerEvents: "none",
+              animation: "v2-fade-in 400ms ease-out both",
+            }}
+          />
+          <div
+            style={{
+              ...panelBase,
+              zIndex: 101,
+              animation: "v2-slide-up 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
+              overflowY: "auto",
+              boxShadow: "0 -24px 64px rgba(0, 0, 0, 0.6), 0 -2px 0 rgba(245, 215, 166, 0.25)",
+            }}
+          >
+            {/* Gold leading-edge hairline — glows as the panel crests */}
+            <div
+              aria-hidden
+              style={{
+                position: "sticky", top: 0, left: 0, right: 0,
+                height: 2,
+                background: "linear-gradient(90deg, transparent 0%, rgba(245, 215, 166, 0.9) 50%, transparent 100%)",
+                boxShadow: "0 0 18px rgba(245, 215, 166, 0.55)",
+                zIndex: 3,
+                animation: "v2-fade-in 400ms ease-out 180ms both",
+              }}
+            />
           <div
             style={{
               minHeight: "100vh",
@@ -1024,6 +1068,7 @@ function SignInV2({ onSuccess, onBack }) {
             <V2SubBrandSheet parent={sheetParent} onClose={() => setSheetParent(null)} />
           )}
         </div>
+        </>
       )}
 
       {/* PANEL C — Verify */}
@@ -3887,9 +3932,15 @@ export default function App() {
         </div>
       )}
 
+      {/* Landing renders as both the landing screen AND the backdrop for
+          the sign-up slide-up reveal (V2 only). In classic mode Landing
+          unmounts immediately when view transitions to SIGNIN. */}
       {view === VIEW.LANDING && (classic
         ? <Landing onSignIn={() => setView(VIEW.SIGNIN)} />
         : <LandingV2 onSignIn={() => setView(VIEW.SIGNIN)} />
+      )}
+      {view === VIEW.SIGNIN && !classic && (
+        <LandingV2 onSignIn={() => {}} dimmed />
       )}
       {view === VIEW.SIGNIN && (classic
         ? <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
