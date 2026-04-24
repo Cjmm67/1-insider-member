@@ -254,7 +254,736 @@ const s = {
   modalInner: { background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 400, boxShadow: "0 24px 64px rgba(0,0,0,.2)" },
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// V2 — Private Club Visual System (Phase 3, 1-insider-private-club-ui skill)
+// ═══════════════════════════════════════════════════════════════════════════
+// Additive layer on top of Phase 1 + Phase 2. URL param ?classic=1 falls back
+// to the Phase 1/2 screens unchanged. Tokens from design-tokens.md; components
+// from components.md; motion from motion.md.
+
+const V2 = {
+  bg:            "#0F111A",
+  card:          "#1A1D27",
+  elevated:      "#2A2D36",
+  overlay:       "rgba(15, 17, 26, 0.7)",
+  text:          "#F2F3F5",
+  textSecondary: "#A8ABB3",
+  textMuted:     "#6B6E76",
+  textOnGold:    "#1A1D27",
+  gold:          "#F5D7A6",
+  goldSoft:      "#FBE8C9",
+  goldShadow:    "#C79A5A",
+  info:          "#4A8DFF",
+  divider:       "rgba(242, 243, 245, 0.08)",
+  dividerStrong: "rgba(242, 243, 245, 0.16)",
+  goldBorder:    "rgba(245, 215, 166, 0.3)",
+};
+
+const useClassicMode = () => {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("classic") === "1";
+};
+
+// Inject V2 keyframes once per mount. Safe to include alongside Phase 1's
+// existing @keyframes fadeIn and spin — keyframe names are v2- prefixed.
+function V2Styles() {
+  return (
+    <style>{
+      "@keyframes v2-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }" +
+      "@keyframes v2-sheen { 0% { transform: translateX(-60%); } 100% { transform: translateX(160%); } }" +
+      "@keyframes v2-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.75; transform: scale(1.04); } }" +
+      "@keyframes v2-slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }" +
+      "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
+      "@keyframes v2-shimmer-once { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(100%); opacity: 1; } }" +
+      "@media (prefers-reduced-motion: reduce) { " +
+      "  *[class*='v2-'] { animation-duration: 150ms !important; } " +
+      "  .v2-sheen-overlay, .v2-fab-idle, .v2-qr-glow { animation: none !important; } " +
+      "}"
+    }</style>
+  );
+}
+
+// V2 badge — renders top-right on every redesigned screen, taps to fall back
+// to the Phase 1/2 classic version via ?classic=1.
+function V2Badge() {
+  return (
+    <div
+      onClick={() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("classic", "1");
+        window.location.href = url.toString();
+      }}
+      style={{
+        position: "fixed", top: 16, right: 16, zIndex: 1001,
+        display: "inline-flex", alignItems: "center", gap: 6,
+        padding: "4px 10px", borderRadius: 10,
+        fontSize: 10, fontWeight: 600, letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        background: "rgba(245, 215, 166, 0.15)",
+        color: V2.gold,
+        border: "1px solid " + V2.goldBorder,
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        cursor: "pointer",
+        fontFamily: FONT.b,
+      }}
+      title="View classic design"
+    >
+      ✦ V2 Design · View classic
+    </div>
+  );
+}
+
+// Circular gold FAB with built-in press state.
+function V2GoldFAB({ onClick, children, ariaLabel, style, idlePulse }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      aria-label={ariaLabel || "Continue"}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      onTouchStart={() => setPressed(true)}
+      onTouchEnd={() => setPressed(false)}
+      style={{
+        width: 64, height: 64, borderRadius: "50%",
+        background: "linear-gradient(135deg, " + V2.goldSoft + " 0%, " + V2.gold + " 100%)",
+        color: V2.textOnGold,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 26, fontWeight: 600,
+        fontFamily: FONT.b,
+        boxShadow: "0 0 32px rgba(245, 215, 166, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4)",
+        transform: pressed ? "scale(0.94)" : "scale(1)",
+        transition: "transform 120ms ease-out",
+        animation: idlePulse ? "v2-pulse 2s ease-in-out infinite" : "none",
+        ...style,
+      }}
+    >
+      {children || "→"}
+    </button>
+  );
+}
+
+// Solid or ghost gold button with press state.
+function V2GoldButton({ children, onClick, variant, disabled, style }) {
+  const [pressed, setPressed] = useState(false);
+  const base = {
+    fontFamily: FONT.b, fontSize: 14, fontWeight: 600, letterSpacing: "0.02em",
+    borderRadius: 10, padding: "14px 24px", border: "none",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+    width: "100%",
+    transform: pressed ? "scale(0.97)" : "scale(1)",
+    transition: "transform 120ms ease-out",
+  };
+  const variants = {
+    solid: {
+      background: V2.gold, color: V2.textOnGold,
+      boxShadow: "0 0 0 1px " + V2.goldBorder + ", 0 0 24px rgba(245, 215, 166, 0.2)",
+    },
+    ghost: {
+      background: "transparent", color: V2.gold,
+      border: "1px solid " + V2.goldBorder,
+    },
+  };
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      onMouseDown={() => !disabled && setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      onTouchStart={() => !disabled && setPressed(true)}
+      onTouchEnd={() => setPressed(false)}
+      style={{ ...base, ...(variants[variant] || variants.solid), ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Glass panel with thin gold top hairline.
+function V2GlassPanel({ children, style }) {
+  return (
+    <div
+      style={{
+        background: "rgba(26, 29, 39, 0.72)",
+        backdropFilter: "blur(24px) saturate(120%)",
+        WebkitBackdropFilter: "blur(24px) saturate(120%)",
+        borderRadius: 24,
+        border: "1px solid rgba(245, 215, 166, 0.18)",
+        boxShadow: "0 1px 0 rgba(242, 243, 245, 0.06) inset, 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(245, 215, 166, 0.15)",
+        padding: 28,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Dark-surface text input.
+function V2TextInput({ label, value, onChange, type, placeholder, autoFocus }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {label && (
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 8, fontFamily: FONT.b }}>
+          {label}
+        </div>
+      )}
+      <input
+        value={value || ""}
+        onChange={e => onChange(e.target.value)}
+        type={type || "text"}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{
+          width: "100%",
+          background: V2.elevated,
+          border: "1px solid " + (focused ? V2.goldBorder : V2.divider),
+          borderRadius: 10,
+          padding: "14px 16px",
+          color: V2.text,
+          fontFamily: FONT.b,
+          fontSize: 15,
+          outline: "none",
+          boxSizing: "border-box",
+          transition: "border-color 200ms ease-out",
+        }}
+      />
+    </div>
+  );
+}
+
+// 6-slot OTP input — monospace, gold underline on active slot.
+function V2OtpInput({ value, onChange, length }) {
+  const L = length || 6;
+  const str = (value || "").padEnd(L, " ").slice(0, L);
+  const handle = (i, v) => {
+    const digit = v.replace(/\D/g, "").slice(-1);
+    const next = (value || "").split("");
+    next[i] = digit;
+    const joined = next.join("").replace(/\s/g, "").slice(0, L);
+    onChange(joined);
+    if (digit) {
+      const nextInput = document.getElementById("v2-otp-" + (i + 1));
+      if (nextInput) nextInput.focus();
+    }
+  };
+  return (
+    <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 24 }}>
+      {Array.from({ length: L }).map((_, i) => (
+        <input
+          key={i}
+          id={"v2-otp-" + i}
+          value={str[i].trim()}
+          onChange={e => handle(i, e.target.value)}
+          maxLength={1}
+          inputMode="numeric"
+          style={{
+            width: 44, height: 56,
+            textAlign: "center",
+            fontFamily: FONT.m, fontSize: 22, fontWeight: 500, letterSpacing: "0.05em",
+            color: V2.gold,
+            background: V2.elevated,
+            border: "none",
+            borderBottom: "2px solid " + V2.goldBorder,
+            borderRadius: "10px 10px 0 0",
+            outline: "none",
+            transition: "border-color 200ms ease-out",
+          }}
+          onFocus={e => { e.target.style.borderBottomColor = V2.gold; }}
+          onBlur={e => { e.target.style.borderBottomColor = V2.goldBorder; }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── S1: Landing / Opening Page ──────────────────────────────────────────
+//
+// Moodboard slide 2: full-bleed cinematic hero, gold streak overlay on left
+// rail, INSIDER wordmark, single gold FAB to enter the 3-part sign-in flow.
+//
+// Landing video: drop /public/landing-hero.mp4 into the repo to enable the
+// video hero. Until then, a dark still using the River House heritage image
+// renders as the fallback (preserves Eber L12 workaround: mobile always sees
+// the static image anyway).
+function LandingV2({ onSignIn }) {
+  const [idle, setIdle] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIdle(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0,
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        overflow: "hidden",
+        zIndex: 100,
+      }}
+    >
+      <V2Styles />
+      <V2Badge />
+
+      {/* Hero still — reuses the River House heritage crop until a video is uploaded. */}
+      <img
+        src="/venues/river-house.jpg"
+        alt=""
+        style={{
+          position: "absolute", inset: 0,
+          width: "100%", height: "100%",
+          objectFit: "cover",
+          animation: "v2-fade-in 400ms ease-out",
+          filter: "saturate(0.85) contrast(1.05)",
+        }}
+      />
+
+      {/* Gold streak on left rail */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute", top: 0, bottom: 0, left: 0, width: "22%",
+          background: "linear-gradient(90deg, rgba(245, 215, 166, 0.35) 0%, transparent 100%)",
+          mixBlendMode: "screen",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Scrim for legibility */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(180deg, rgba(15,17,26,0.4) 0%, rgba(15,17,26,0.85) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Centre content */}
+      <div
+        style={{
+          position: "relative", zIndex: 2,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          minHeight: "100vh",
+          padding: "60px 24px 120px",
+          textAlign: "center",
+          animation: "v2-fade-in 800ms ease-out 200ms both",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: FONT.b,
+            fontSize: 11, fontWeight: 600,
+            letterSpacing: "0.3em", textTransform: "uppercase",
+            color: V2.gold,
+            marginBottom: 20,
+          }}
+        >
+          ✦ 1-Group Singapore
+        </div>
+        <div
+          style={{
+            fontFamily: FONT.h,
+            fontSize: 64, fontWeight: 700,
+            letterSpacing: "-0.02em",
+            color: V2.text,
+            lineHeight: 1,
+            marginBottom: 24,
+          }}
+        >
+          INSIDER
+        </div>
+        <div
+          style={{
+            fontFamily: FONT.b,
+            fontSize: 15, fontWeight: 400,
+            color: V2.textSecondary,
+            maxWidth: 320,
+            lineHeight: 1.5,
+          }}
+        >
+          A members-only gateway to 1-Group Singapore — twenty-three venues, one private world.
+        </div>
+      </div>
+
+      {/* Gold FAB bottom-right */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: "calc(40px + env(safe-area-inset-bottom))",
+          right: 24,
+          zIndex: 3,
+          animation: "v2-fade-in 400ms ease-out 600ms both",
+        }}
+      >
+        <V2GoldFAB onClick={onSignIn} idlePulse={idle} ariaLabel="Enter INSIDER">→</V2GoldFAB>
+      </div>
+
+      {/* Small existing-member link bottom-left */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: "calc(52px + env(safe-area-inset-bottom))",
+          left: 24,
+          zIndex: 3,
+          animation: "v2-fade-in 400ms ease-out 800ms both",
+        }}
+      >
+        <div
+          onClick={onSignIn}
+          style={{
+            fontFamily: FONT.b, fontSize: 12, fontWeight: 500,
+            color: V2.textSecondary,
+            cursor: "pointer",
+            letterSpacing: "0.02em",
+          }}
+        >
+          Already a member? <span style={{ color: V2.gold, fontWeight: 600 }}>Sign in →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── S2: 3-Part Slide-Up Sign-In ──────────────────────────────────────────
+//
+// Moodboard slide 2 (right): three stacked panels, slide-up transitioned.
+// A = Brand moment · B = Login · C = 6-slot OTP verify.
+//
+// Email login is Eber L03 demo only — the ✦ DEMO badge on the Email row is
+// mandatory. Panel C's OTP verify reuses the Phase 1 demo fallback: any
+// 6-digit OTP resolves via Supabase member lookup (by email if possible,
+// otherwise Sophia Chen M0001 — identical to the Phase 2 U14 mock).
+function SignInV2({ onSuccess, onBack }) {
+  const [panel, setPanel] = useState(0); // 0 = brand, 1 = login, 2 = verify
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(30);
+
+  useEffect(() => {
+    if (panel !== 2) return;
+    setResendIn(30);
+    const t = setInterval(() => setResendIn(r => Math.max(0, r - 1)), 1000);
+    return () => clearInterval(t);
+  }, [panel]);
+
+  const proceedToVerify = () => {
+    setError("");
+    if (!email || !email.includes("@")) { setError("Enter a valid email address"); return; }
+    setPanel(2);
+  };
+
+  const verify = async () => {
+    setError("");
+    if (!otp || otp.length < 4) { setError("Enter the 6-digit code"); return; }
+    setLoading(true);
+    try {
+      // Demo lookup: try email first, fall back to M0001 (Sophia Chen)
+      let m = await supaFetch("members?email=eq." + encodeURIComponent(email));
+      if (!Array.isArray(m) || !m.length) m = await supaFetch("members?id=eq.M0001");
+      if (Array.isArray(m) && m[0]) onSuccess(m[0]);
+      else setError("Verification failed");
+    } catch (e) {
+      setError("Connection error");
+    }
+    setLoading(false);
+  };
+
+  const panelBase = {
+    position: "fixed", inset: 0,
+    background: V2.bg,
+    color: V2.text,
+    fontFamily: FONT.b,
+    overflow: "hidden",
+    zIndex: 100 + panel,
+  };
+
+  return (
+    <>
+      <V2Styles />
+      <V2Badge />
+
+      {/* PANEL A — Brand moment */}
+      {panel === 0 && (
+        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+          {/* Gold streak left rail */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", top: 0, bottom: 0, left: 0, width: "30%",
+              background: "linear-gradient(90deg, rgba(245, 215, 166, 0.25) 0%, transparent 100%)",
+              mixBlendMode: "screen",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "relative", zIndex: 2,
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              minHeight: "100vh", padding: "60px 24px 120px", textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.3em", textTransform: "uppercase", color: V2.gold, marginBottom: 20, fontFamily: FONT.b }}>
+              ✦ 1-Group Singapore
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 56, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 24 }}>
+              INSIDER
+            </div>
+            <div style={{ fontFamily: FONT.b, fontSize: 14, color: V2.textSecondary, maxWidth: 300, lineHeight: 1.5 }}>
+              Your gateway to twenty-three private venues.
+            </div>
+          </div>
+
+          <div style={{ position: "fixed", bottom: "calc(40px + env(safe-area-inset-bottom))", right: 24, zIndex: 3 }}>
+            <V2GoldFAB onClick={() => setPanel(1)} ariaLabel="Continue">→</V2GoldFAB>
+          </div>
+          <div style={{ position: "fixed", bottom: "calc(52px + env(safe-area-inset-bottom))", left: 24, zIndex: 3 }}>
+            <div onClick={onBack} style={{ fontFamily: FONT.b, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}>
+              ← Back
+            </div>
+          </div>
+
+          <div
+            style={{
+              position: "fixed", bottom: 16, left: 0, right: 0,
+              textAlign: "center",
+              fontSize: 10, color: V2.textMuted,
+              padding: "0 24px",
+              lineHeight: 1.5,
+            }}
+          >
+            By continuing, you agree to our <span style={{ color: V2.gold }}>Terms</span> and <span style={{ color: V2.gold }}>Privacy Policy</span>.
+          </div>
+        </div>
+      )}
+
+      {/* PANEL B — Login */}
+      {panel === 1 && (
+        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+          <div
+            style={{
+              minHeight: "100vh",
+              padding: "60px 24px 40px",
+              display: "flex", flexDirection: "column", justifyContent: "center",
+              maxWidth: 480, margin: "0 auto",
+            }}
+          >
+            <V2GlassPanel>
+              {/* shimmer-once hairline */}
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute", top: -1, left: 0, right: 0, height: 1,
+                  background: "linear-gradient(90deg, transparent 0%, rgba(245,215,166,0.9) 50%, transparent 100%)",
+                  animation: "v2-shimmer-once 600ms ease-out",
+                  borderRadius: 24,
+                  overflow: "hidden",
+                }}
+              />
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 16 }}>
+                ✦ 1-Insider
+              </div>
+              <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 8, lineHeight: 1.2 }}>
+                Log in to unlock INSIDER potential.
+              </div>
+              <div style={{ fontSize: 13, color: V2.textSecondary, marginBottom: 28, lineHeight: 1.5 }}>
+                Your gateway to trusted identity.
+              </div>
+
+              <V2TextInput
+                label="Your email"
+                value={email}
+                onChange={setEmail}
+                type="email"
+                placeholder="member@insider.com"
+                autoFocus
+              />
+
+              {/* Eber L03 demo notice */}
+              <div
+                style={{
+                  background: "rgba(74, 141, 255, 0.12)",
+                  border: "1px solid rgba(74, 141, 255, 0.4)",
+                  color: "#B3CEFF",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  marginBottom: 16,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                }}
+              >
+                <span aria-hidden>✦</span>
+                <span>
+                  <strong style={{ letterSpacing: "0.08em" }}>DEMO</strong> — Email login is an Eber L03 preview. In demo mode any 6-digit code will resolve you to your account. Production will use mobile OTP until Eber supports email.
+                </span>
+              </div>
+
+              {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14 }}>{error}</div>}
+
+              <V2GoldButton onClick={proceedToVerify} style={{ marginBottom: 20 }}>Login</V2GoldButton>
+
+              {/* Divider with "or" chip */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                <div style={{ flex: 1, height: 1, background: V2.divider }} />
+                <div style={{ fontSize: 10, color: V2.textMuted, letterSpacing: "0.2em", textTransform: "uppercase" }}>or</div>
+                <div style={{ flex: 1, height: 1, background: V2.divider }} />
+              </div>
+
+              {/* Social row — Apple / Google / Email, Email carries ✦ DEMO badge */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                {[
+                  { id: "apple", label: "Apple", icon: "", demo: true },
+                  { id: "google", label: "Google", icon: "G", demo: true },
+                  { id: "email", label: "Email", icon: "✉", demo: true, flagged: true },
+                ].map(opt => (
+                  <div
+                    key={opt.id}
+                    onClick={proceedToVerify}
+                    style={{
+                      flex: 1,
+                      padding: "14px 8px",
+                      borderRadius: 10,
+                      background: V2.elevated,
+                      border: "1px solid " + V2.divider,
+                      textAlign: "center",
+                      cursor: "pointer",
+                      position: "relative",
+                      transition: "border-color 200ms",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = V2.goldBorder; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = V2.divider; }}
+                  >
+                    <div style={{ fontSize: 18, marginBottom: 4, color: V2.text }}>{opt.icon}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: V2.text }}>{opt.label}</div>
+                    {opt.flagged && (
+                      <div
+                        style={{
+                          position: "absolute", top: 4, right: 4,
+                          fontSize: 8, fontWeight: 700, letterSpacing: "0.12em",
+                          color: V2.gold,
+                          padding: "1px 4px",
+                          borderRadius: 4,
+                          background: "rgba(245, 215, 166, 0.15)",
+                        }}
+                      >
+                        ✦ DEMO
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ textAlign: "center", fontSize: 12, color: V2.textSecondary }}>
+                I'm a new user. <span style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Sign Up</span>
+              </div>
+            </V2GlassPanel>
+
+            <div
+              onClick={() => setPanel(0)}
+              style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
+            >
+              ← Back
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PANEL C — Verify */}
+      {panel === 2 && (
+        <div style={{ ...panelBase, animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+          <div
+            style={{
+              minHeight: "100vh",
+              padding: "60px 24px 40px",
+              display: "flex", flexDirection: "column", justifyContent: "center",
+              maxWidth: 480, margin: "0 auto",
+            }}
+          >
+            <V2GlassPanel>
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute", top: -1, left: 0, right: 0, height: 1,
+                  background: "linear-gradient(90deg, transparent 0%, rgba(245,215,166,0.9) 50%, transparent 100%)",
+                  animation: "v2-shimmer-once 600ms ease-out",
+                }}
+              />
+
+              {/* Gold envelope-with-check icon */}
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ margin: "0 auto" }}>
+                  <rect x="6" y="14" width="44" height="32" rx="4" stroke={V2.gold} strokeWidth="2" />
+                  <path d="M6 18L28 32L50 18" stroke={V2.gold} strokeWidth="2" strokeLinejoin="round" />
+                  <circle cx="42" cy="42" r="10" fill={V2.gold} />
+                  <path d="M37 42L41 46L48 38" stroke={V2.textOnGold} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+
+              <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", textAlign: "center", marginBottom: 8 }}>
+                Verify
+              </div>
+              <div style={{ fontSize: 13, color: V2.textSecondary, textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>
+                We've sent the verification code to<br />
+                <span style={{ color: V2.text, fontFamily: FONT.m, fontSize: 13 }}>{email || "member@insider.com"}</span>
+              </div>
+
+              <V2OtpInput value={otp} onChange={setOtp} />
+
+              {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14, textAlign: "center" }}>{error}</div>}
+
+              <V2GoldButton onClick={verify} disabled={loading} style={{ marginBottom: 16 }}>
+                {loading ? "Verifying…" : "Submit"}
+              </V2GoldButton>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+                <span
+                  onClick={() => resendIn === 0 && setResendIn(30)}
+                  style={{ color: resendIn === 0 ? V2.gold : V2.textMuted, cursor: resendIn === 0 ? "pointer" : "default", fontWeight: 600 }}
+                >
+                  Resend Code
+                </span>
+                <span style={{ color: V2.textMuted }}>
+                  {resendIn > 0 ? "You can resend in " + resendIn + " sec" : "You can resend now"}
+                </span>
+              </div>
+            </V2GlassPanel>
+
+            <div
+              onClick={() => { setPanel(1); setOtp(""); setError(""); }}
+              style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
+            >
+              ← Change email
+            </div>
+
+            <div style={{ textAlign: "center", marginTop: 10, fontSize: 10, color: V2.textMuted, letterSpacing: "0.15em", textTransform: "uppercase" }}>
+              Page 3 of 3 · ● ● ●
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function App() {
+  const classic = useClassicMode();
   const [view, setView] = useState(VIEW.LANDING);
   const [member, setMember] = useState(null);
   const [rewards, setRewards] = useState([]);
@@ -343,8 +1072,14 @@ export default function App() {
         </div>
       )}
 
-      {view === VIEW.LANDING && <Landing onSignIn={() => setView(VIEW.SIGNIN)} />}
-      {view === VIEW.SIGNIN && <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />}
+      {view === VIEW.LANDING && (classic
+        ? <Landing onSignIn={() => setView(VIEW.SIGNIN)} />
+        : <LandingV2 onSignIn={() => setView(VIEW.SIGNIN)} />
+      )}
+      {view === VIEW.SIGNIN && (classic
+        ? <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
+        : <SignInV2 onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
+      )}
       {view === VIEW.HOME && member && <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
