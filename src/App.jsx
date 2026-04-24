@@ -295,6 +295,8 @@ function V2Styles() {
       "@keyframes v2-slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }" +
       "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
       "@keyframes v2-fab-ignite { 0% { box-shadow: 0 0 0 0 rgba(245,215,166,0.5); } 100% { box-shadow: 0 0 0 80px rgba(245,215,166,0); } }" +
+      "@keyframes v2-gold-shimmer { 0% { background-position: 200% 50%; } 50% { background-position: 0% 50%; } 100% { background-position: -200% 50%; } }" +
+      "@keyframes v2-page-curl-down { 0% { transform: rotateX(0deg); transform-origin: top center; } 100% { transform: rotateX(-95deg); transform-origin: top center; } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
       "@keyframes v2-shimmer-once { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(100%); opacity: 1; } }" +
       "@media (prefers-reduced-motion: reduce) { " +
@@ -528,18 +530,20 @@ function V2OtpInput({ value, onChange, length }) {
 // video hero. Until then, a dark still using the River House heritage image
 // renders as the fallback (preserves Eber L12 workaround: mobile always sees
 // the static image anyway).
-function LandingV2({ onSignIn, dimmed }) {
+function LandingV2({ onSignIn, dimmed, peeling }) {
   const [idle, setIdle] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
 
-  // Marquee venues from VENUE_DIRECTORY — the hero compilation rotates
-  // through these until a proper /public/landing-hero.mp4 is uploaded.
+  // Marquee venues from VENUE_DIRECTORY — order per Chris's direction:
+  // Monti opens, then The Alkaff Mansion, then 1-Arden, then onward through
+  // rooftops and heritage. Replace with a /public/landing-hero.mp4 once available.
   const heroImages = [
-    VENUE_DIRECTORY.find(v => v.name === "1-Arden")?.thumbnail,
-    VENUE_DIRECTORY.find(v => v.name === "1-Alfaro")?.thumbnail,
-    VENUE_DIRECTORY.find(v => v.name === "1-Atico")?.thumbnail,
-    VENUE_DIRECTORY.find(v => v.name === "The River House")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "Monti")?.thumbnail,
     VENUE_DIRECTORY.find(v => v.name === "The Alkaff Mansion")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "1-Arden")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "1-Atico")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "1-Alfaro")?.thumbnail,
+    VENUE_DIRECTORY.find(v => v.name === "The River House")?.thumbnail,
     VENUE_DIRECTORY.find(v => v.name === "The Summer House")?.thumbnail,
   ].filter(Boolean);
 
@@ -564,10 +568,15 @@ function LandingV2({ onSignIn, dimmed }) {
         color: V2.text,
         fontFamily: FONT.b,
         overflow: "hidden",
-        zIndex: dimmed ? 50 : 100,
-        filter: dimmed ? "brightness(0.65) saturate(0.85)" : "none",
-        transition: "filter 520ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        zIndex: peeling ? 105 : (dimmed ? 50 : 100),
+        filter: dimmed && !peeling ? "brightness(0.65) saturate(0.85)" : "none",
+        transition: dimmed && !peeling ? "filter 520ms cubic-bezier(0.2, 0.8, 0.2, 1)" : "none",
         pointerEvents: dimmed ? "none" : "auto",
+        transformStyle: "preserve-3d",
+        perspective: 1400,
+        animation: peeling ? "v2-page-curl-down 900ms cubic-bezier(0.55, 0.05, 0.4, 0.95) forwards" : "none",
+        transformOrigin: "top center",
+        boxShadow: peeling ? "0 24px 80px rgba(0, 0, 0, 0.7)" : "none",
       }}
     >
       <V2Styles />
@@ -677,7 +686,7 @@ function LandingV2({ onSignIn, dimmed }) {
         <V2GoldFAB onClick={onSignIn} idlePulse={idle} ariaLabel="Enter INSIDER">→</V2GoldFAB>
       </div>
 
-      {/* Small existing-member link bottom-left */}
+      {/* Existing-member CTA bottom-left — bigger + glossy gold per moodboard */}
       <div
         style={{
           position: "fixed",
@@ -690,13 +699,29 @@ function LandingV2({ onSignIn, dimmed }) {
         <div
           onClick={onSignIn}
           style={{
-            fontFamily: FONT.b, fontSize: 12, fontWeight: 500,
-            color: V2.textSecondary,
+            fontFamily: FONT.b, fontSize: 14, fontWeight: 500,
+            color: V2.text,
             cursor: "pointer",
             letterSpacing: "0.02em",
+            display: "flex", flexDirection: "column", gap: 2,
           }}
         >
-          Already a member? <span style={{ color: V2.gold, fontWeight: 600 }}>Sign in →</span>
+          <span style={{ color: V2.textSecondary, fontSize: 12, opacity: 0.85 }}>Already a member?</span>
+          <span
+            style={{
+              fontSize: 16, fontWeight: 700,
+              background: "linear-gradient(135deg, #FBE8C9 0%, #F5D7A6 35%, #C79A5A 50%, #F5D7A6 65%, #FBE8C9 100%)",
+              backgroundSize: "200% 200%",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              animation: "v2-gold-shimmer 4s ease-in-out infinite",
+              textShadow: "0 1px 2px rgba(245, 215, 166, 0.25)",
+              letterSpacing: "0.03em",
+            }}
+          >
+            Sign in →
+          </span>
         </div>
       </div>
     </div>
@@ -909,9 +934,12 @@ function V2CorporateEnquiryModal({ onClose }) {
 // mandatory. Panel C's OTP verify reuses the Phase 1 demo fallback: any
 // 6-digit OTP resolves via Supabase member lookup (by email if possible,
 // otherwise Sophia Chen M0001 — identical to the Phase 2 U14 mock).
-function SignInV2({ onSuccess, onBack }) {
+function SignInV2({ onSuccess, onBack, revealing }) {
   // Panel 0 (brand moment) removed per feedback — direct-to-login flow.
   // Panel 1 = Login; Panel 2 = OTP verify.
+  // The page-curl-down on LandingV2 reveals this panel, so panel 1's
+  // own slide-up animation only fires when the user navigates here from
+  // a non-curl entry (e.g. after the curl is complete and a return).
   const [panel, setPanel] = useState(1);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -1013,61 +1041,16 @@ function SignInV2({ onSuccess, onBack }) {
              motion.md Section 2 — insider-slide-up + shimmer overlay). */}
       {panel === 1 && (
         <>
-          {/* Scrim fade-in behind the rising panel — fades out during exit */}
-          <div
-            aria-hidden
-            style={{
-              position: "fixed", inset: 0,
-              background: "rgba(11, 13, 20, 0.55)",
-              backdropFilter: "blur(2px)",
-              WebkitBackdropFilter: "blur(2px)",
-              zIndex: 100,
-              pointerEvents: "none",
-              opacity: exiting ? 0 : 1,
-              animation: exiting ? "none" : "v2-fade-in 400ms ease-out both",
-              transition: exiting ? "opacity 220ms ease-out" : "none",
-            }}
-          />
           <div
             style={{
               ...panelBase,
               zIndex: 101,
               animation: exiting
                 ? "v2-slide-down 240ms cubic-bezier(0.4, 0, 1, 1) forwards"
-                : "v2-slide-up 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
+                : "v2-fade-in 600ms ease-out 200ms both",
               overflowY: "auto",
-              boxShadow: "0 -28px 72px rgba(0, 0, 0, 0.7), 0 -2px 0 rgba(245, 215, 166, 0.45)",
             }}
           >
-            {/* Gold leading-edge hairline — glows as the panel crests.
-                Made bolder per moodboard slide 2: 3px with 28px gold halo. */}
-            <div
-              aria-hidden
-              style={{
-                position: "sticky", top: 0, left: 0, right: 0,
-                height: 3,
-                background: "linear-gradient(90deg, transparent 0%, rgba(245, 215, 166, 1) 50%, transparent 100%)",
-                boxShadow: "0 0 28px rgba(245, 215, 166, 0.75), 0 0 56px rgba(245, 215, 166, 0.35)",
-                zIndex: 3,
-                opacity: exiting ? 0 : 1,
-                animation: exiting ? "none" : "v2-fade-in 500ms ease-out 250ms both",
-                transition: exiting ? "opacity 180ms ease-out" : "none",
-              }}
-            />
-            {/* Secondary crest glow — adds volume to the leading edge as it rises */}
-            <div
-              aria-hidden
-              style={{
-                position: "sticky", top: 3, left: 0, right: 0,
-                height: 0,
-                boxShadow: "0 -1px 40px 8px rgba(245, 215, 166, 0.22)",
-                zIndex: 2,
-                pointerEvents: "none",
-                opacity: exiting ? 0 : 1,
-                animation: exiting ? "none" : "v2-fade-in 600ms ease-out 300ms both",
-                transition: exiting ? "opacity 180ms ease-out" : "none",
-              }}
-            />
           <div
             style={{
               minHeight: "100vh",
@@ -1087,14 +1070,22 @@ function SignInV2({ onSuccess, onBack }) {
                   overflow: "hidden",
                 }}
               />
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 16 }}>
-                ✦ 1-Insider
+              {/* Gold 1-INSIDER logo at top of login panel */}
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
+                <img
+                  src="/insider-logo-gold.png"
+                  alt="1-INSIDER"
+                  style={{
+                    width: 180, maxWidth: "60%", height: "auto",
+                    filter: "drop-shadow(0 2px 12px rgba(245, 215, 166, 0.3))",
+                  }}
+                />
               </div>
-              <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 8, lineHeight: 1.2 }}>
-                Log in to unlock INSIDER potential.
+              <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 10, lineHeight: 1.25, color: "#FFFFFF", textAlign: "center" }}>
+                Join now to unlock the full potential of 1-Insider
               </div>
-              <div style={{ fontSize: 13, color: V2.textSecondary, marginBottom: 28, lineHeight: 1.5 }}>
-                Your gateway to trusted identity.
+              <div style={{ fontSize: 13, color: "#FFFFFF", opacity: 0.8, marginBottom: 28, lineHeight: 1.5, textAlign: "center" }}>
+                Your gateway to a trusted community.
               </div>
 
               <V2TextInput
@@ -4112,6 +4103,17 @@ export default function App() {
   const [view, setView] = useState(VIEW.LANDING);
   const [member, setMember] = useState(null);
   const [showPay, setShowPay] = useState(false);
+  const [peeling, setPeeling] = useState(false); // Landing → SignIn page-curl
+
+  // Page-curl orchestrator: cinematic flips down (rotateX), revealing
+  // the login panel that's already mounted underneath. After 900ms the
+  // landing unmounts and the SignInV2 panel becomes the sole layer.
+  const goToSignIn = useCallback(() => {
+    if (peeling) return;
+    setPeeling(true);
+    setView(VIEW.SIGNIN); // mount SignInV2 underneath immediately
+    setTimeout(() => setPeeling(false), 950);
+  }, [peeling]);
   const [rewards, setRewards] = useState([]);
   const [transactions, setTxns] = useState([]);
   const [vouchers, setVouchers] = useState([]);
@@ -4207,19 +4209,25 @@ export default function App() {
         </div>
       )}
 
-      {/* Landing renders as both the landing screen AND the backdrop for
-          the sign-up slide-up reveal (V2 only). In classic mode Landing
-          unmounts immediately when view transitions to SIGNIN. */}
-      {view === VIEW.LANDING && (classic
-        ? <Landing onSignIn={() => setView(VIEW.SIGNIN)} />
-        : <LandingV2 onSignIn={() => setView(VIEW.SIGNIN)} />
+      {/* V2 LANDING + SIGNIN page-curl orchestration:
+          - Landing mounts whenever view is LANDING, OR while peeling (so it
+            visibly curls away).
+          - SignInV2 mounts as soon as view flips to SIGNIN — it sits at z=101
+            underneath the curling landing (z=105 during peel). After 900ms
+            the landing unmounts and SignInV2 is the sole layer. */}
+      {view === VIEW.LANDING && classic && <Landing onSignIn={() => setView(VIEW.SIGNIN)} />}
+      {(view === VIEW.LANDING || peeling) && !classic && (
+        <LandingV2 onSignIn={goToSignIn} peeling={peeling} />
+      )}
+      {view === VIEW.SIGNIN && classic && (
+        <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
       )}
       {view === VIEW.SIGNIN && !classic && (
-        <LandingV2 onSignIn={() => {}} dimmed />
-      )}
-      {view === VIEW.SIGNIN && (classic
-        ? <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
-        : <SignInV2 onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
+        <SignInV2
+          onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }}
+          onBack={() => setView(VIEW.LANDING)}
+          revealing={peeling}
+        />
       )}
       {view === VIEW.HOME && member && (classic
         ? <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />
