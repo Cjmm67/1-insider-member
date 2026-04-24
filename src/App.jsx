@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 
 // ─── Supabase ───
 const SUPA_URL = "https://tobtmtshxgpkkucsaxyk.supabase.co";
@@ -1533,9 +1533,9 @@ function V2EventCard({ heroImage, title, venueName, dateTime, status, tierExclus
   );
 }
 
-function V2BottomNav({ view, setView, classic, hasUnscannedVoucher }) {
+function V2BottomNav({ view, setView, classic, hasUnscannedVoucher, onScan }) {
   // 5-tab bottom nav with centre Scan FAB (raised).
-  // Mapping: Home → HOME · Rewards → REWARDS · [Scan] → WALLET (until S7 lands)
+  // Mapping: Home → HOME · Rewards → REWARDS · [Scan] → onScan callback or WALLET fallback
   // · Points → HISTORY · City → EXPLORE.
   const tabs = [
     { key: "home",    label: "Home",    icon: "⌂", v: VIEW.HOME },
@@ -1568,7 +1568,7 @@ function V2BottomNav({ view, setView, classic, hasUnscannedVoucher }) {
           return (
             <button
               key={tab.key}
-              onClick={() => setView(tab.v)}
+              onClick={() => (onScan ? onScan() : setView(tab.v))}
               onMouseDown={() => setFabPressed(true)}
               onMouseUp={() => setFabPressed(false)}
               onMouseLeave={() => setFabPressed(false)}
@@ -2838,10 +2838,456 @@ function ReceiptsHistoryV2({ member, receipts, setView }) {
 }
 
 
+// ─── S7: QR Scan-to-Pay ───────────────────────────────────────────────────
+
+// Faux QR code — visually convincing pattern with corner position markers,
+// timing stripes, and pseudo-random data cells seeded by the payload string.
+// Not a real scannable QR (that would need qrcode.js). Swap for a real
+// library when POS integration is ready; component interface stays the same.
+function V2QRCode({ payload, size }) {
+  const s = size || 240;
+  const cells = 29;
+  const cellSize = s / cells;
+
+  const grid = useMemo(() => {
+    const seedBase = (payload || "M0001").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+    let rng = seedBase * 31 + 7;
+    const next = () => { rng = (rng * 1103515245 + 12345) >>> 0; return (rng & 0x7fffffff) / 0x7fffffff; };
+
+    const g = Array.from({ length: cells }, () => Array(cells).fill(false));
+
+    // Fill data area pseudo-random
+    for (let y = 0; y < cells; y++) {
+      for (let x = 0; x < cells; x++) {
+        g[y][x] = next() > 0.5;
+      }
+    }
+
+    // Three corner position markers (top-left, top-right, bottom-left)
+    const corners = [[0, 0], [cells - 7, 0], [0, cells - 7]];
+    for (let ci = 0; ci < corners.length; ci++) {
+      const cx = corners[ci][0], cy = corners[ci][1];
+      // 9x9 clear separator around, then the 7x7 marker
+      for (let dy = -1; dy <= 7; dy++) {
+        for (let dx = -1; dx <= 7; dx++) {
+          const y = cy + dy, x = cx + dx;
+          if (y < 0 || y >= cells || x < 0 || x >= cells) continue;
+          g[y][x] = false;
+        }
+      }
+      for (let dy = 0; dy < 7; dy++) {
+        for (let dx = 0; dx < 7; dx++) {
+          const isRing = dx === 0 || dx === 6 || dy === 0 || dy === 6;
+          const isCentre = dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4;
+          g[cy + dy][cx + dx] = isRing || isCentre;
+        }
+      }
+    }
+
+    // Timing stripes along row 6 and col 6 between the corner markers
+    for (let i = 8; i < cells - 8; i++) {
+      g[6][i] = i % 2 === 0;
+      g[i][6] = i % 2 === 0;
+    }
+
+    // Clear a 7x7 area in the centre for the logo overlay
+    const mid = Math.floor(cells / 2);
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        g[mid + dy][mid + dx] = false;
+      }
+    }
+
+    return g;
+  }, [payload]);
+
+  const rects = [];
+  for (let y = 0; y < cells; y++) {
+    for (let x = 0; x < cells; x++) {
+      if (grid[y][x]) {
+        rects.push(<rect key={x + "_" + y} x={x * cellSize} y={y * cellSize} width={cellSize} height={cellSize} fill="#0F111A" />);
+      }
+    }
+  }
+
+  return (
+    <svg
+      width={s} height={s}
+      viewBox={"0 0 " + s + " " + s}
+      style={{ background: "#F2F3F5", borderRadius: 14, display: "block" }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x={0} y={0} width={s} height={s} fill="#F2F3F5" />
+      {rects}
+      {/* Centre logo overlay — dark square with gold ✦ */}
+      <rect x={s / 2 - 20} y={s / 2 - 20} width={40} height={40} fill="#0F111A" rx={8} />
+      <text x={s / 2} y={s / 2 + 7} textAnchor="middle" fill="#F5D7A6" fontSize={22} fontWeight={700}>✦</text>
+    </svg>
+  );
+}
+
+// S7 — QR Scan-to-Pay overlay.
+// Opens as a full-screen fixed overlay from the Scan FAB in V2BottomNav.
+// Display-only at the tab/POS level (real POS validation requires Agilysys-
+// Eber integration per Phase 2 U10). The Pay-with-points toggle is a preview
+// of what will apply when the cashier closes the tab.
+function QrScanPayV2({ member, vouchers, venueName, tabAmount, onClose }) {
+  const pointsBalance = (member && member.points) || 0;
+  const tierId = (member && member.tier) || "silver";
+  const tierInfo = TIER_INFO[tierId] || TIER_INFO.silver;
+
+  // Earn-rate multiplier per Phase 1 base-rate table
+  const earnMultiplier = { silver: 1, gold: 1.5, platinum: 2, corporate: 1.5, staff: 1 }[tierId] || 1;
+
+  // Demo tab: use a passed-in amount or fall back to a plausible bill
+  const total = tabAmount != null ? tabAmount : 128.00;
+
+  // Redemption tiers from Phase 1 base rate (points-rules.json)
+  const redeemTiers = [
+    { pts: 100, value: 10 },
+    { pts: 150, value: 15 },
+    { pts: 250, value: 25 },
+  ];
+
+  // Preselect the largest redemption the member can afford (or null if <100)
+  const defaultPointsOffset = redeemTiers
+    .filter(t => t.pts <= pointsBalance)
+    .sort((a, b) => b.value - a.value)[0] || null;
+
+  const [payWithPoints, setPayWithPoints] = useState(false);
+  const [selectedRedeem, setSelectedRedeem] = useState(defaultPointsOffset);
+
+  const canPayWithPoints = pointsBalance >= 100;
+
+  const pointsOffset = payWithPoints && selectedRedeem ? selectedRedeem.value : 0;
+  const amountDue = Math.max(0, total - pointsOffset);
+  const pointsEarned = Math.round(amountDue * earnMultiplier);
+
+  // Active cash voucher (first applicable, illustrative only — Phase 1 stacking
+  // rules allow exactly 1 cash + 1 points voucher per check).
+  const activeCashVoucher = (vouchers || []).find(v => v.status === "active" && v.type !== "points");
+  const showStackingOk = activeCashVoucher && payWithPoints;
+
+  // QR payload encodes what a real POS scanner would need.
+  const qrPayload = "1INSIDER:" + (member.id || "") + ":" + Date.now().toString(36);
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0,
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        zIndex: 400,
+        animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        overflowY: "auto",
+      }}
+    >
+      <V2Styles />
+      <style>{
+        "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 56px rgba(245, 215, 166, 0.5); } }"
+      }</style>
+
+      {/* Top bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 12px" }}>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            width: 36, height: 36, borderRadius: "50%",
+            background: V2.card,
+            border: "1px solid " + V2.divider,
+            color: V2.text, fontSize: 18, cursor: "pointer", fontFamily: FONT.b,
+          }}
+        >×</button>
+        <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 600, color: V2.text, letterSpacing: "-0.01em" }}>
+          {venueName || "FLNT"}
+        </div>
+        <div style={{ width: 36 }} />
+      </div>
+
+      <div style={{ padding: "8px 24px 40px", maxWidth: 480, margin: "0 auto" }}>
+        {/* QR block */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24 }}>
+          <div
+            style={{
+              padding: 18,
+              background: "#F2F3F5",
+              borderRadius: 20,
+              boxShadow: "0 0 32px rgba(245, 215, 166, 0.25)",
+              animation: "v2-glow-pulse 2.4s ease-in-out infinite",
+              marginBottom: 16,
+            }}
+          >
+            <V2QRCode payload={qrPayload} size={220} />
+          </div>
+          <div style={{ fontSize: 13, color: V2.textSecondary, textAlign: "center", lineHeight: 1.5 }}>
+            Show this code to the counter to open your tab.
+          </div>
+          <div style={{ fontFamily: FONT.m, fontSize: 10, color: V2.textMuted, marginTop: 6, letterSpacing: "0.05em" }}>
+            {qrPayload}
+          </div>
+        </div>
+
+        {/* Context pills — Party / Tip (display only in this flow) */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 24 }}>
+          {[
+            { label: "Party of 2", icon: "◐" },
+            { label: "Tip 10%", icon: "◆" },
+          ].map((p, i) => (
+            <div
+              key={i}
+              style={{
+                padding: "7px 14px",
+                borderRadius: 9999,
+                background: V2.card,
+                border: "1px solid " + V2.divider,
+                fontSize: 11, color: V2.textSecondary,
+                fontFamily: FONT.b, fontWeight: 600,
+                letterSpacing: "0.02em",
+              }}
+            >
+              <span style={{ marginRight: 6, color: V2.gold }}>{p.icon}</span>{p.label}
+            </div>
+          ))}
+        </div>
+
+        {/* 1-INSIDER PAY summary card */}
+        <div
+          style={{
+            padding: 22,
+            background: V2.card,
+            border: "1px solid " + V2.goldBorder,
+            borderRadius: 16,
+            marginBottom: 14,
+            boxShadow: "inset 0 1px 0 rgba(245, 215, 166, 0.15), 0 8px 24px rgba(0, 0, 0, 0.25)",
+          }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.25em", textTransform: "uppercase", color: V2.gold, marginBottom: 16 }}>
+            ✦ 1-Insider Pay
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0", fontSize: 13, color: V2.textSecondary }}>
+            <span>Your total</span>
+            <span style={{ fontFamily: FONT.h, color: V2.text, fontSize: 16, fontVariantNumeric: "tabular-nums" }}>
+              {v2FormatMoney(total)}
+            </span>
+          </div>
+
+          {pointsOffset > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0", fontSize: 13, color: "#A5D6A7" }}>
+              <span>
+                Points voucher
+                <div style={{ fontSize: 10, color: V2.textMuted, marginTop: 2 }}>{selectedRedeem.pts} pts = ${selectedRedeem.value}</div>
+              </span>
+              <span style={{ fontFamily: FONT.h, fontVariantNumeric: "tabular-nums" }}>
+                −{v2FormatMoney(pointsOffset)}
+              </span>
+            </div>
+          )}
+
+          <div style={{ height: 1, background: V2.divider, margin: "10px 0" }} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: V2.textSecondary }}>
+                Amount due
+              </div>
+              <div style={{ fontSize: 12, color: V2.gold, marginTop: 4, fontWeight: 600 }}>
+                +{pointsEarned.toLocaleString()} points earned
+              </div>
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em", color: V2.text, fontVariantNumeric: "tabular-nums" }}>
+              {v2FormatMoney(amountDue)}
+            </div>
+          </div>
+        </div>
+
+        {/* Pay with points toggle */}
+        <div
+          style={{
+            padding: "16px 18px",
+            background: V2.card,
+            border: "1px solid " + V2.divider,
+            borderRadius: 12,
+            marginBottom: 10,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            opacity: canPayWithPoints ? 1 : 0.5,
+          }}
+        >
+          <div style={{ flex: 1, paddingRight: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: V2.text, marginBottom: 3 }}>
+              Pay with points
+            </div>
+            <div style={{ fontSize: 11, color: V2.textMuted }}>
+              {pointsBalance.toLocaleString()} available
+              {payWithPoints && selectedRedeem && " · using " + selectedRedeem.pts + " pts for $" + selectedRedeem.value}
+            </div>
+          </div>
+          <button
+            onClick={() => canPayWithPoints && setPayWithPoints(p => !p)}
+            disabled={!canPayWithPoints}
+            aria-label="Pay with points toggle"
+            style={{
+              width: 48, height: 28, borderRadius: 9999,
+              background: payWithPoints ? V2.gold : V2.elevated,
+              border: "none",
+              cursor: canPayWithPoints ? "pointer" : "not-allowed",
+              position: "relative",
+              transition: "background 200ms ease-out",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute", top: 2, left: payWithPoints ? 22 : 2,
+                width: 24, height: 24, borderRadius: "50%",
+                background: payWithPoints ? V2.textOnGold : V2.text,
+                transition: "left 200ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+              }}
+            />
+          </button>
+        </div>
+
+        {/* Points-tier picker — shown when toggle is on */}
+        {payWithPoints && canPayWithPoints && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            {redeemTiers.map(t => {
+              const affordable = pointsBalance >= t.pts;
+              const selected = selectedRedeem && selectedRedeem.pts === t.pts;
+              return (
+                <button
+                  key={t.pts}
+                  onClick={() => affordable && setSelectedRedeem(t)}
+                  disabled={!affordable}
+                  style={{
+                    flex: 1,
+                    padding: "10px 8px",
+                    background: selected ? "rgba(245, 215, 166, 0.12)" : V2.card,
+                    border: "1px solid " + (selected ? V2.goldBorder : V2.divider),
+                    borderRadius: 10,
+                    color: affordable ? V2.text : V2.textMuted,
+                    cursor: affordable ? "pointer" : "not-allowed",
+                    fontFamily: FONT.b,
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600, color: selected ? V2.gold : V2.textSecondary, letterSpacing: "0.05em" }}>
+                    {t.pts} pts
+                  </div>
+                  <div style={{ fontSize: 13, fontFamily: FONT.h, fontWeight: 600, color: affordable ? V2.text : V2.textMuted, marginTop: 2 }}>
+                    ${t.value}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Low-balance warning */}
+        {!canPayWithPoints && (
+          <div
+            style={{
+              background: "rgba(255, 152, 0, 0.12)",
+              border: "1px solid rgba(255, 152, 0, 0.4)",
+              color: "#FFD180",
+              borderRadius: 10,
+              padding: "12px 16px",
+              fontSize: 11,
+              lineHeight: 1.5,
+              marginBottom: 10,
+              display: "flex", gap: 8, alignItems: "flex-start",
+            }}
+          >
+            <span aria-hidden>⚠️</span>
+            <span>
+              You need at least <strong>100 pts</strong> to redeem a points voucher.
+              Earn {(100 - pointsBalance).toLocaleString()} more points to unlock $10 off your next tab.
+            </span>
+          </div>
+        )}
+
+        {/* Stacking confirmation — 1 cash + 1 points is allowed per Phase 1 rules */}
+        {showStackingOk && (
+          <div
+            style={{
+              background: "rgba(74, 141, 255, 0.12)",
+              border: "1px solid rgba(74, 141, 255, 0.4)",
+              color: "#B3CEFF",
+              borderRadius: 10,
+              padding: "12px 16px",
+              fontSize: 11,
+              lineHeight: 1.5,
+              marginBottom: 10,
+              display: "flex", gap: 8, alignItems: "flex-start",
+            }}
+          >
+            <span aria-hidden>✦</span>
+            <span>
+              Your ${activeCashVoucher.value || tierInfo.vValue} dining voucher and points redemption will both apply —
+              1-Insider allows 1 cash voucher + 1 points voucher per check.
+            </span>
+          </div>
+        )}
+
+        {/* Payment method row */}
+        <div
+          style={{
+            padding: "14px 16px",
+            background: V2.card,
+            border: "1px solid " + V2.divider,
+            borderRadius: 12,
+            marginBottom: 18,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40, height: 28,
+                borderRadius: 5,
+                background: "linear-gradient(135deg, #F5D7A6 0%, #C79A5A 100%)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 9, fontWeight: 700, color: V2.textOnGold, letterSpacing: "0.05em",
+              }}
+            >
+              VISA
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: V2.text }}>Visa ••••&nbsp;4821</div>
+              <div style={{ fontSize: 11, color: V2.textMuted }}>Primary card</div>
+            </div>
+          </div>
+          <div
+            style={{
+              padding: "4px 10px",
+              borderRadius: 9999,
+              background: "rgba(245, 215, 166, 0.12)",
+              color: V2.gold,
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+              border: "1px solid " + V2.goldBorder,
+            }}
+          >
+            {earnMultiplier}× points
+          </div>
+        </div>
+
+        {/* Footer note */}
+        <div style={{ textAlign: "center", fontSize: 11, color: V2.textMuted, lineHeight: 1.5 }}>
+          The counter will close the tab and apply your selections automatically.
+          <br />
+          <span style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>1-Insider Pay FAQs →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const classic = useClassicMode();
   const [view, setView] = useState(VIEW.LANDING);
   const [member, setMember] = useState(null);
+  const [showPay, setShowPay] = useState(false);
   const [rewards, setRewards] = useState([]);
   const [transactions, setTxns] = useState([]);
   const [vouchers, setVouchers] = useState([]);
@@ -2983,8 +3429,20 @@ export default function App() {
           setView={setView}
           classic={classic}
           hasUnscannedVoucher={(vouchers || []).some(v => v.status === "pending_scan")}
+          onScan={() => setShowPay(true)}
         />
       ))}
+
+      {/* S7: QR Scan-to-Pay overlay — V2 only, triggered from Scan FAB */}
+      {!classic && showPay && member && (
+        <QrScanPayV2
+          member={member}
+          vouchers={vouchers}
+          venueName="FLNT"
+          tabAmount={128.00}
+          onClose={() => setShowPay(false)}
+        />
+      )}
     </div>
   );
 }
