@@ -294,6 +294,7 @@ function V2Styles() {
       "@keyframes v2-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.75; transform: scale(1.04); } }" +
       "@keyframes v2-slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }" +
       "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
+      "@keyframes v2-fab-ignite { 0% { box-shadow: 0 0 0 0 rgba(245,215,166,0.5); } 100% { box-shadow: 0 0 0 80px rgba(245,215,166,0); } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
       "@keyframes v2-shimmer-once { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(100%); opacity: 1; } }" +
       "@media (prefers-reduced-motion: reduce) { " +
@@ -640,18 +641,16 @@ function LandingV2({ onSignIn, dimmed }) {
         >
           ✦ 1-Group Singapore
         </div>
-        <div
+        <img
+          src="/insider-logo-gold.png"
+          alt="1-INSIDER"
           style={{
-            fontFamily: FONT.h,
-            fontSize: 64, fontWeight: 700,
-            letterSpacing: "-0.02em",
-            color: V2.text,
-            lineHeight: 1,
-            marginBottom: 24,
+            width: 280, maxWidth: "78vw", height: "auto",
+            marginBottom: 28,
+            filter: "drop-shadow(0 4px 24px rgba(245, 215, 166, 0.25))",
+            animation: "v2-fade-in 900ms ease-out 300ms both",
           }}
-        >
-          INSIDER
-        </div>
+        />
         <div
           style={{
             fontFamily: FONT.b,
@@ -1035,21 +1034,38 @@ function SignInV2({ onSuccess, onBack }) {
               zIndex: 101,
               animation: exiting
                 ? "v2-slide-down 240ms cubic-bezier(0.4, 0, 1, 1) forwards"
-                : "v2-slide-up 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
+                : "v2-slide-up 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
               overflowY: "auto",
-              boxShadow: "0 -24px 64px rgba(0, 0, 0, 0.6), 0 -2px 0 rgba(245, 215, 166, 0.25)",
+              boxShadow: "0 -28px 72px rgba(0, 0, 0, 0.7), 0 -2px 0 rgba(245, 215, 166, 0.45)",
             }}
           >
-            {/* Gold leading-edge hairline — glows as the panel crests */}
+            {/* Gold leading-edge hairline — glows as the panel crests.
+                Made bolder per moodboard slide 2: 3px with 28px gold halo. */}
             <div
               aria-hidden
               style={{
                 position: "sticky", top: 0, left: 0, right: 0,
-                height: 2,
-                background: "linear-gradient(90deg, transparent 0%, rgba(245, 215, 166, 0.9) 50%, transparent 100%)",
-                boxShadow: "0 0 18px rgba(245, 215, 166, 0.55)",
+                height: 3,
+                background: "linear-gradient(90deg, transparent 0%, rgba(245, 215, 166, 1) 50%, transparent 100%)",
+                boxShadow: "0 0 28px rgba(245, 215, 166, 0.75), 0 0 56px rgba(245, 215, 166, 0.35)",
                 zIndex: 3,
-                animation: "v2-fade-in 400ms ease-out 180ms both",
+                opacity: exiting ? 0 : 1,
+                animation: exiting ? "none" : "v2-fade-in 500ms ease-out 250ms both",
+                transition: exiting ? "opacity 180ms ease-out" : "none",
+              }}
+            />
+            {/* Secondary crest glow — adds volume to the leading edge as it rises */}
+            <div
+              aria-hidden
+              style={{
+                position: "sticky", top: 3, left: 0, right: 0,
+                height: 0,
+                boxShadow: "0 -1px 40px 8px rgba(245, 215, 166, 0.22)",
+                zIndex: 2,
+                pointerEvents: "none",
+                opacity: exiting ? 0 : 1,
+                animation: exiting ? "none" : "v2-fade-in 600ms ease-out 300ms both",
+                transition: exiting ? "opacity 180ms ease-out" : "none",
               }}
             />
           <div
