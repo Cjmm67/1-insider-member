@@ -293,6 +293,7 @@ function V2Styles() {
       "@keyframes v2-sheen { 0% { transform: translateX(-60%); } 100% { transform: translateX(160%); } }" +
       "@keyframes v2-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.75; transform: scale(1.04); } }" +
       "@keyframes v2-slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }" +
+      "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
       "@keyframes v2-shimmer-once { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(100%); opacity: 1; } }" +
       "@media (prefers-reduced-motion: reduce) { " +
@@ -691,6 +692,203 @@ function LandingV2({ onSignIn, dimmed }) {
   );
 }
 
+// ─── V2 Corporate Enquiry Modal — dark-theme port of the classic modal ───
+function V2CorporateEnquiryModal({ onClose }) {
+  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", teamSize: "", message: "" });
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isValid = form.name.trim() && form.company.trim() && form.email.includes("@");
+
+  const submit = () => {
+    if (!isValid) return;
+    // Demo-only: log locally. Real integration would POST to a corporate-enquiries
+    // Supabase table or dispatch via Gmail MCP to corporate@1-group.sg.
+    console.log("V2 Corporate enquiry submitted:", form);
+    setSubmitted(true);
+  };
+
+  const labelStyle = { fontSize: 10.5, color: V2.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, display: "block", fontFamily: FONT.b };
+  const inputStyle = {
+    width: "100%", boxSizing: "border-box",
+    padding: "12px 14px", fontSize: 13,
+    background: V2.elevated,
+    color: V2.text,
+    border: "1px solid " + V2.divider,
+    borderRadius: 10,
+    outline: "none",
+    fontFamily: FONT.b,
+    transition: "border-color 200ms",
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(11, 13, 20, 0.72)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16,
+        zIndex: 600,
+        animation: "v2-fade-in 240ms ease-out",
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 440,
+          background: V2.card,
+          borderRadius: 18,
+          border: "1px solid " + V2.goldBorder,
+          padding: 24,
+          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.6)",
+          maxHeight: "90vh", overflowY: "auto",
+          color: V2.text,
+          fontFamily: FONT.b,
+          animation: "v2-slide-up 360ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        }}
+      >
+        {!submitted ? (
+          <>
+            <div style={{ fontSize: 10, color: V2.gold, textTransform: "uppercase", letterSpacing: "0.2em", fontWeight: 700, marginBottom: 6 }}>
+              ◈ Corporate Membership
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.2, marginBottom: 6 }}>
+              Let&rsquo;s build a programme for your team
+            </div>
+            <div style={{ fontSize: 12, color: V2.textSecondary, marginBottom: 18, lineHeight: 1.5 }}>
+              Share a few details and our Corporate team will be in touch within 2 business days.
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={labelStyle}>Your name *</label>
+                <input style={inputStyle} value={form.name} onChange={e => update("name", e.target.value)} placeholder="Jane Tan" />
+              </div>
+              <div>
+                <label style={labelStyle}>Company *</label>
+                <input style={inputStyle} value={form.company} onChange={e => update("company", e.target.value)} placeholder="Acme Pte Ltd" />
+              </div>
+              <div>
+                <label style={labelStyle}>Work email *</label>
+                <input style={inputStyle} type="email" value={form.email} onChange={e => update("email", e.target.value)} placeholder="jane.tan@acme.sg" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={labelStyle}>Phone</label>
+                  <input style={inputStyle} value={form.phone} onChange={e => update("phone", e.target.value)} placeholder="+65…" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Team size</label>
+                  <select style={inputStyle} value={form.teamSize} onChange={e => update("teamSize", e.target.value)}>
+                    <option value="">Choose…</option>
+                    <option>10–25</option>
+                    <option>26–50</option>
+                    <option>51–100</option>
+                    <option>101–500</option>
+                    <option>500+</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>What are you looking for?</label>
+                <textarea
+                  style={{ ...inputStyle, resize: "vertical", minHeight: 80 }}
+                  rows={3}
+                  value={form.message}
+                  onChange={e => update("message", e.target.value)}
+                  placeholder="E.g. client gifting programme, team dining benefits, event venue access…"
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "rgba(74, 141, 255, 0.12)",
+                border: "1px solid rgba(74, 141, 255, 0.35)",
+                color: "#B3CEFF",
+                borderRadius: 10,
+                padding: "10px 14px",
+                fontSize: 11, lineHeight: 1.5,
+                marginTop: 14, marginBottom: 16,
+                display: "flex", gap: 8, alignItems: "flex-start",
+              }}
+            >
+              <span aria-hidden>✦</span>
+              <span>Corporate tiers are bespoke — our team will share a tailored benefits package after a short discovery call.</span>
+            </div>
+
+            <button
+              onClick={submit}
+              disabled={!isValid}
+              style={{
+                width: "100%",
+                background: V2.gold,
+                color: V2.textOnGold,
+                border: "none",
+                padding: "13px 18px",
+                borderRadius: 10,
+                fontSize: 13.5, fontWeight: 700, letterSpacing: "0.02em",
+                cursor: isValid ? "pointer" : "not-allowed",
+                opacity: isValid ? 1 : 0.45,
+                marginBottom: 10,
+                fontFamily: FONT.b,
+                boxShadow: isValid ? "0 4px 14px rgba(245, 215, 166, 0.2)" : "none",
+                transition: "opacity 200ms, box-shadow 200ms",
+              }}
+            >
+              Submit enquiry
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                width: "100%",
+                background: "transparent",
+                color: V2.textMuted,
+                border: "1px solid " + V2.divider,
+                padding: "11px 18px",
+                borderRadius: 10,
+                fontSize: 13, fontWeight: 500,
+                cursor: "pointer",
+                fontFamily: FONT.b,
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ fontSize: 40, marginBottom: 14, color: V2.gold }}>✦</div>
+            <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 10 }}>
+              Enquiry received
+            </div>
+            <div style={{ fontSize: 13, color: V2.text, marginBottom: 6 }}>Thank you, {form.name.split(" ")[0]}.</div>
+            <div style={{ fontSize: 12, color: V2.textSecondary, marginBottom: 22, lineHeight: 1.5 }}>
+              Our Corporate team will reach out to <strong style={{ color: V2.gold }}>{form.email}</strong> within 2 business days to schedule a discovery call.
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                width: "100%",
+                background: V2.gold,
+                color: V2.textOnGold,
+                border: "none",
+                padding: "13px 18px",
+                borderRadius: 10,
+                fontSize: 13.5, fontWeight: 700, letterSpacing: "0.02em",
+                cursor: "pointer", fontFamily: FONT.b,
+              }}
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── S2: 3-Part Slide-Up Sign-In ──────────────────────────────────────────
 //
 // Moodboard slide 2 (right): three stacked panels, slide-up transitioned.
@@ -711,6 +909,17 @@ function SignInV2({ onSuccess, onBack }) {
   const [resendIn, setResendIn] = useState(30);
   const [expandedTier, setExpandedTier] = useState(null);
   const [sheetParent, setSheetParent] = useState(null);
+  const [showCorporate, setShowCorporate] = useState(false);
+  const [exiting, setExiting] = useState(false);
+
+  // Reverse slide-down: trigger exit animation then call parent's onBack.
+  // Symmetric with the entrance (520ms slide-up), but exits at the motion
+  // spec's 220ms — 'things leave quickly' per the skill's governing principle.
+  const handleBack = () => {
+    if (exiting) return;
+    setExiting(true);
+    setTimeout(() => onBack(), 240);
+  };
 
   useEffect(() => {
     if (panel !== 2) return;
@@ -768,7 +977,7 @@ function SignInV2({ onSuccess, onBack }) {
              motion.md Section 2 — insider-slide-up + shimmer overlay). */}
       {panel === 1 && (
         <>
-          {/* Scrim fade-in behind the rising panel */}
+          {/* Scrim fade-in behind the rising panel — fades out during exit */}
           <div
             aria-hidden
             style={{
@@ -778,14 +987,18 @@ function SignInV2({ onSuccess, onBack }) {
               WebkitBackdropFilter: "blur(2px)",
               zIndex: 100,
               pointerEvents: "none",
-              animation: "v2-fade-in 400ms ease-out both",
+              opacity: exiting ? 0 : 1,
+              animation: exiting ? "none" : "v2-fade-in 400ms ease-out both",
+              transition: exiting ? "opacity 220ms ease-out" : "none",
             }}
           />
           <div
             style={{
               ...panelBase,
               zIndex: 101,
-              animation: "v2-slide-up 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
+              animation: exiting
+                ? "v2-slide-down 240ms cubic-bezier(0.4, 0, 1, 1) forwards"
+                : "v2-slide-up 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
               overflowY: "auto",
               boxShadow: "0 -24px 64px rgba(0, 0, 0, 0.6), 0 -2px 0 rgba(245, 215, 166, 0.25)",
             }}
@@ -923,7 +1136,7 @@ function SignInV2({ onSuccess, onBack }) {
             </V2GlassPanel>
 
             <div
-              onClick={onBack}
+              onClick={handleBack}
               style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
             >
               ← Back
@@ -1012,9 +1225,7 @@ function SignInV2({ onSuccess, onBack }) {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (isEnquire) {
-                                // Corporate enquiry opens the Phase 2 classic modal in classic mode;
-                                // in V2 fall back to a mailto for now.
-                                window.location.href = "mailto:corporate@1-group.sg?subject=Corporate%20Membership%20Enquiry";
+                                setShowCorporate(true);
                               } else {
                                 // Tap scrolls to top of login panel so they can fill the email
                                 window.scrollTo({ top: 0, behavior: "smooth" });
