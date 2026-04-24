@@ -2424,6 +2424,420 @@ function V2SubBrandSheet({ parent, onClose }) {
 }
 
 
+// ─── S6: Payment / Receipt + Receipts History ─────────────────────────────
+
+function v2FormatMoney(amount) {
+  const n = parseFloat(amount || 0);
+  return "$" + n.toLocaleString("en-SG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function v2FormatReceiptMeta(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" });
+    const time = d.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
+    return date + ", " + time;
+  } catch (e) { return iso; }
+}
+
+// Group receipts by year-month, newest first, with total per month.
+function v2GroupReceiptsByMonth(receipts) {
+  const groups = {};
+  for (const r of (receipts || [])) {
+    if (!r.charged_at) continue;
+    const d = new Date(r.charged_at);
+    const key = d.getFullYear() + "-" + String(d.getMonth()).padStart(2, "0");
+    if (!groups[key]) {
+      groups[key] = {
+        key,
+        label: d.toLocaleDateString("en-SG", { month: "long", year: "numeric" }),
+        items: [],
+        total: 0,
+      };
+    }
+    groups[key].items.push(r);
+    groups[key].total += parseFloat(r.total_paid || 0);
+  }
+  return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
+}
+
+function V2AccordionSection({ title, totalLabel, children, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen !== false);
+  return (
+    <div style={{ borderBottom: "1px solid " + V2.divider, marginBottom: 4 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          width: "100%", padding: "18px 2px",
+          background: "transparent", border: "none", cursor: "pointer",
+          color: V2.text, textAlign: "left", fontFamily: FONT.b,
+        }}
+      >
+        <span style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>
+          {title}
+        </span>
+        <span style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {totalLabel && (
+            <span style={{ fontSize: 13, color: V2.textSecondary }}>
+              {totalLabel}
+            </span>
+          )}
+          <span
+            style={{
+              color: V2.textMuted, fontSize: 14,
+              display: "inline-block",
+              transform: open ? "rotate(180deg)" : "rotate(0)",
+              transition: "transform 200ms ease-out",
+            }}
+          >⌄</span>
+        </span>
+      </button>
+      {open && (
+        <div style={{ paddingBottom: 12, animation: "v2-fade-in 300ms ease-out" }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function V2ReceiptHistoryRow({ receipt, onOpen, index }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      onClick={() => onOpen(receipt)}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        width: "100%", padding: "14px 12px",
+        background: V2.card,
+        border: "1px solid " + V2.divider,
+        borderRadius: 10,
+        cursor: "pointer",
+        textAlign: "left",
+        marginBottom: 8,
+        fontFamily: FONT.b,
+        color: V2.text,
+        transform: pressed ? "scale(0.99)" : "scale(1)",
+        transition: "transform 120ms ease-out",
+        animation: "v2-fade-in 400ms ease-out " + (index * 30) + "ms both",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: V2.text, marginBottom: 3 }}>
+          {receipt.venue_name}
+        </div>
+        <div style={{ fontSize: 11, color: V2.textMuted }}>
+          {v2FormatReceiptMeta(receipt.charged_at)}
+          {receipt.points_earned > 0 && <span style={{ color: V2.gold, marginLeft: 8 }}>+{receipt.points_earned} pts</span>}
+        </div>
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontFamily: FONT.h, fontSize: 16, fontWeight: 600, color: V2.text }}>
+          {v2FormatMoney(receipt.total_paid)}
+        </div>
+        <div style={{ fontSize: 10, color: V2.textMuted, marginTop: 2 }}>View ›</div>
+      </div>
+    </button>
+  );
+}
+
+// Full-screen itemised receipt view (slides up over the history).
+function V2ReceiptDetail({ receipt, onClose }) {
+  const items = (receipt.receipt_items || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const subtotal = receipt.subtotal || items.reduce((a, i) => a + parseFloat(i.line_total || 0), 0);
+  const discount = parseFloat(receipt.discount_amount || 0);
+  const tip = parseFloat(receipt.tip_amount || 0);
+  const total = parseFloat(receipt.total_paid || 0);
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0,
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        zIndex: 300,
+        animation: "v2-slide-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        overflowY: "auto",
+      }}
+    >
+      <V2Styles />
+
+      {/* Top bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 12px", position: "sticky", top: 0, background: V2.bg, zIndex: 2 }}>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            width: 36, height: 36, borderRadius: "50%",
+            background: V2.card,
+            border: "1px solid " + V2.divider,
+            color: V2.text, fontSize: 18, cursor: "pointer", fontFamily: FONT.b,
+          }}
+        >×</button>
+        <div style={{ fontFamily: FONT.h, fontSize: 16, fontWeight: 600, color: V2.text }}>
+          Your receipt
+        </div>
+        <div style={{ width: 36 }} />
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: "12px 24px 40px", maxWidth: 480, margin: "0 auto" }}>
+        {/* Meta block */}
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.gold, marginBottom: 6 }}>
+            ✦ 1-Insider Pay
+          </div>
+          <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, color: V2.text, letterSpacing: "-0.01em", marginBottom: 4 }}>
+            {receipt.venue_name}
+          </div>
+          <div style={{ fontSize: 12, color: V2.textSecondary }}>
+            {v2FormatReceiptMeta(receipt.charged_at)}
+          </div>
+        </div>
+
+        {/* Line items */}
+        <div style={{ marginBottom: 20 }}>
+          {items.length === 0 ? (
+            <div style={{ padding: 16, textAlign: "center", color: V2.textMuted, fontSize: 12 }}>
+              No itemised breakdown available for this receipt.
+            </div>
+          ) : items.map((item, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex", alignItems: "baseline", gap: 12,
+                padding: "11px 0",
+                borderBottom: "1px solid " + V2.divider,
+                animation: "v2-fade-in 400ms ease-out " + (i * 40) + "ms both",
+              }}
+            >
+              <div style={{ width: 28, fontFamily: FONT.m, fontSize: 12, color: V2.textMuted }}>
+                {item.qty}×
+              </div>
+              <div style={{ flex: 1, fontSize: 14, color: V2.text }}>
+                {item.name}
+                {item.is_promotional && (
+                  <div style={{ fontSize: 10, color: V2.textMuted, marginTop: 2, letterSpacing: "0.05em" }}>
+                    — Promotional item, no points (Eber L04)
+                  </div>
+                )}
+              </div>
+              <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: V2.text, fontVariantNumeric: "tabular-nums" }}>
+                {v2FormatMoney(item.line_total)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Gold hairline */}
+        <div style={{ height: 1, background: "linear-gradient(90deg, transparent 0%, " + V2.gold + " 50%, transparent 100%)", margin: "8px 0 20px" }} />
+
+        {/* Subtotal / discount / tip caption */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13, color: V2.textSecondary }}>
+            <span>Subtotal</span>
+            <span style={{ fontFamily: FONT.h, color: V2.text, fontVariantNumeric: "tabular-nums" }}>
+              {v2FormatMoney(subtotal)}
+            </span>
+          </div>
+          {discount > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13, color: "#A5D6A7" }}>
+              <span>
+                Discount
+                {receipt.discount_label && <div style={{ fontSize: 10, color: V2.textMuted, marginTop: 2 }}>{receipt.discount_label}</div>}
+              </span>
+              <span style={{ fontFamily: FONT.h, fontVariantNumeric: "tabular-nums" }}>
+                −{v2FormatMoney(discount)}
+              </span>
+            </div>
+          )}
+          {tip > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13, color: V2.textSecondary }}>
+              <span>Tip</span>
+              <span style={{ fontFamily: FONT.h, color: V2.text, fontVariantNumeric: "tabular-nums" }}>
+                {v2FormatMoney(tip)}
+              </span>
+            </div>
+          )}
+          {tip > 0 && (
+            <div style={{ fontSize: 10, color: V2.textMuted, marginTop: 8, fontStyle: "italic" }}>
+              All tips are distributed to our teams.
+            </div>
+          )}
+        </div>
+
+        {/* Total paid */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "18px 0 20px", borderTop: "1px solid " + V2.dividerStrong }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 4 }}>
+              Total amount paid
+            </div>
+            {receipt.points_earned > 0 && (
+              <div style={{ fontSize: 12, color: V2.gold, fontWeight: 600 }}>
+                +{receipt.points_earned.toLocaleString()} points earned
+              </div>
+            )}
+            {receipt.points_redeemed > 0 && (
+              <div style={{ fontSize: 12, color: V2.textSecondary }}>
+                −{receipt.points_redeemed.toLocaleString()} points redeemed
+              </div>
+            )}
+          </div>
+          <div style={{ fontFamily: FONT.h, fontSize: 34, fontWeight: 700, letterSpacing: "-0.01em", color: V2.text, fontVariantNumeric: "tabular-nums" }}>
+            {v2FormatMoney(total)}
+          </div>
+        </div>
+
+        {/* Tab ID + payment method */}
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 14px", background: V2.card, borderRadius: 10, border: "1px solid " + V2.divider, marginBottom: 16, fontSize: 12 }}>
+          <div>
+            <div style={{ color: V2.textMuted, marginBottom: 2, fontSize: 10, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase" }}>
+              Tab ID
+            </div>
+            <div style={{ fontFamily: FONT.m, color: V2.gold, fontSize: 13, letterSpacing: "0.05em" }}>
+              {receipt.tab_id || "—"}
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ color: V2.textMuted, marginBottom: 2, fontSize: 10, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase" }}>
+              Paid via
+            </div>
+            <div style={{ color: V2.text, fontSize: 13 }}>
+              {receipt.payment_method || "—"}
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ link */}
+        <div style={{ textAlign: "center" }}>
+          <span style={{ fontSize: 11, color: V2.gold, cursor: "pointer", fontWeight: 600, letterSpacing: "0.02em" }}>
+            1-Insider Pay FAQs →
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Receipts history — month-grouped accordion. Drops into VIEW.HISTORY.
+// When a row is tapped, V2ReceiptDetail slides up as a full-screen overlay.
+function ReceiptsHistoryV2({ member, receipts, setView }) {
+  const [detail, setDetail] = useState(null);
+  const groups = v2GroupReceiptsByMonth(receipts);
+  const lifetime = (receipts || []).reduce((a, r) => a + parseFloat(r.total_paid || 0), 0);
+  const lifetimeVisits = (receipts || []).length;
+
+  return (
+    <div
+      style={{
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        minHeight: "100vh",
+        padding: "24px 20px 100px",
+        animation: "v2-fade-in 400ms ease-out",
+      }}
+    >
+      <V2Styles />
+
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textMuted, marginBottom: 6 }}>
+          ✦ Points & Receipts
+        </div>
+        <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text, marginBottom: 6, lineHeight: 1.1 }}>
+          Your history
+        </div>
+        <div style={{ fontSize: 13, color: V2.textSecondary, lineHeight: 1.5 }}>
+          Every bill you've paid with the app — with itemised breakdown and the points earned on each.
+        </div>
+      </div>
+
+      {/* Lifetime stat strip */}
+      {lifetimeVisits > 0 && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+          <div style={{ flex: 1, padding: "12px 14px", background: V2.card, border: "1px solid " + V2.divider, borderRadius: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 4 }}>
+              Lifetime spend
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, color: V2.text, fontVariantNumeric: "tabular-nums" }}>
+              {v2FormatMoney(lifetime)}
+            </div>
+          </div>
+          <div style={{ flex: 1, padding: "12px 14px", background: V2.card, border: "1px solid " + V2.divider, borderRadius: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 4 }}>
+              Visits tracked
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 700, color: V2.text }}>
+              {lifetimeVisits}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Month accordion */}
+      {groups.length === 0 ? (
+        <div
+          style={{
+            padding: "24px 18px",
+            background: V2.card,
+            border: "1px dashed " + V2.dividerStrong,
+            borderRadius: 14,
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: 13, color: V2.text, marginBottom: 6 }}>
+            No receipts yet
+          </div>
+          <div style={{ fontSize: 12, color: V2.textMuted, lineHeight: 1.5, marginBottom: 16 }}>
+            Pay with the app at any 1-Group venue to see your itemised receipts here.
+          </div>
+          <div
+            onClick={() => setView(VIEW.HOME)}
+            style={{
+              display: "inline-block",
+              padding: "8px 16px", borderRadius: 9999,
+              border: "1px solid " + V2.goldBorder,
+              color: V2.gold, fontSize: 12, fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Back to Home →
+          </div>
+        </div>
+      ) : (
+        groups.map((grp, gi) => (
+          <V2AccordionSection
+            key={grp.key}
+            title={grp.label}
+            totalLabel={v2FormatMoney(grp.total)}
+            defaultOpen={gi === 0}
+          >
+            {grp.items.map((r, i) => (
+              <V2ReceiptHistoryRow
+                key={r.id}
+                index={i}
+                receipt={r}
+                onOpen={setDetail}
+              />
+            ))}
+          </V2AccordionSection>
+        ))
+      )}
+
+      {/* Detail overlay */}
+      {detail && <V2ReceiptDetail receipt={detail} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+
 export default function App() {
   const classic = useClassicMode();
   const [view, setView] = useState(VIEW.LANDING);
@@ -2436,9 +2850,10 @@ export default function App() {
   const [stores, setStores] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [events, setEvents] = useState([]);
+  const [receipts, setReceipts] = useState([]);
 
   const loadMemberData = useCallback(async (memberId) => {
-    const [m, r, t, v, g, tiersList, storesList, bookingsList, eventsList] = await Promise.all([
+    const [m, r, t, v, g, tiersList, storesList, bookingsList, eventsList, receiptsList] = await Promise.all([
       supaFetch("members?id=eq." + memberId),
       supaFetch("rewards?active=eq.true&order=id.asc"),
       supaFetch("transactions?member_id=eq." + memberId + "&order=created_at.desc&limit=20"),
@@ -2448,6 +2863,7 @@ export default function App() {
       supaFetch("stores?status=eq.active&order=category.asc,name.asc"),
       supaFetch("bookings?member_id=eq." + memberId + "&order=starts_at.asc&limit=20"),
       supaFetch("events?status=eq.open&order=starts_at.asc&limit=20"),
+      supaFetch("receipts?member_id=eq." + memberId + "&select=*,receipt_items(*)&order=charged_at.desc&limit=50"),
     ]);
     if (Array.isArray(m) && m[0]) setMember(m[0]);
     if (Array.isArray(r)) setRewards(r);
@@ -2458,6 +2874,7 @@ export default function App() {
     if (Array.isArray(storesList)) setStores(storesList);
     if (Array.isArray(bookingsList)) setBookings(bookingsList);
     if (Array.isArray(eventsList)) setEvents(eventsList);
+    if (Array.isArray(receiptsList)) setReceipts(receiptsList);
   }, []);
 
   const signOut = () => { setMember(null); setView(VIEW.LANDING); };
@@ -2488,7 +2905,7 @@ export default function App() {
         "* { box-sizing: border-box; margin: 0; padding: 0; }"
       }</style>
 
-      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && (
+      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && !(view === VIEW.HISTORY && !classic) && (
         <div style={s.header}>
           <div style={s.logo}>✦ 1-INSIDER</div>
           {member && (
@@ -2541,7 +2958,10 @@ export default function App() {
         ? <ExploreOutlets member={member} stores={stores} setView={setView} />
         : <ExploreOutletsV2 member={member} setView={setView} />
       )}
-      {view === VIEW.HISTORY && member && <HistoryView member={member} setView={setView} />}
+      {view === VIEW.HISTORY && member && (classic
+        ? <HistoryView member={member} setView={setView} />
+        : <ReceiptsHistoryV2 member={member} receipts={receipts} setView={setView} />
+      )}
 
       {member && view >= VIEW.HOME && (classic ? (
         <div style={s.bottomNav}>
