@@ -1014,6 +1014,565 @@ function SignInV2({ onSuccess, onBack }) {
   );
 }
 
+// ─── S3: Home — V2 helpers ────────────────────────────────────────────────
+const V2_TIER_GRADIENTS = {
+  silver:    "linear-gradient(135deg, #F2F3F5 0%, #F6EDEB 100%)",
+  gold:      "linear-gradient(135deg, #FBE8C9 0%, #F5D7A6 50%, #C79A5A 100%)",
+  platinum:  "linear-gradient(135deg, #F1EDFA 0%, #EDEBFA 50%, #9B97C9 100%)",
+  corporate: "linear-gradient(135deg, #2A2D36 0%, #0F111A 100%)",
+  staff:     "linear-gradient(135deg, #4A8DFF 0%, #1E5FC9 100%)",
+};
+
+const V2_TIER_INK = {
+  silver: "#1A1D27", gold: "#1A1D27", platinum: "#1A1D27",
+  corporate: "#F2F3F5", staff: "#F2F3F5",
+};
+
+function V2TierHero({ member }) {
+  const tierId = member.tier || "silver";
+  const tierInfo = TIER_INFO[tierId] || TIER_INFO.silver;
+  const gradient = V2_TIER_GRADIENTS[tierId];
+  const ink = V2_TIER_INK[tierId];
+  const points = member.points || 0;
+
+  // Progress semantics:
+  //  - Silver: progress toward a 2000-pt "ready-for-Gold" milestone (U11 visual cue)
+  //  - Gold / Platinum / Corporate / Staff: progress toward the next redemption
+  //    voucher tier from points-rules.json base rate (100 / 150 / 250 pts)
+  let target, caption;
+  if (tierId === "silver") {
+    target = 2000;
+    const remaining = Math.max(0, target - points);
+    caption = remaining > 0
+      ? "Earn " + remaining.toLocaleString() + " points toward Gold tier"
+      : "You're ready to upgrade to Gold";
+  } else {
+    const redeemTiers = [100, 150, 250];
+    const next = redeemTiers.find(t => t > points) || 250;
+    target = next;
+    const value = { 100: 10, 150: 15, 250: 25 }[next];
+    const remaining = Math.max(0, next - points);
+    caption = remaining > 0
+      ? "Earn " + remaining.toLocaleString() + " more points to redeem a $" + value + " voucher"
+      : "Ready to redeem a $" + value + " voucher";
+  }
+  const pct = Math.min(100, (points / target) * 100);
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        borderRadius: 16,
+        padding: 24,
+        background: gradient,
+        color: ink,
+        overflow: "hidden",
+        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
+        marginBottom: 16,
+      }}
+    >
+      {/* Sheen sweep */}
+      <div
+        aria-hidden
+        className="v2-sheen-overlay"
+        style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.14) 45%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.14) 55%, transparent 100%)",
+          transform: "translateX(-60%)",
+          animation: "v2-sheen 8s linear infinite",
+        }}
+      />
+
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.6, marginBottom: 6 }}>
+          Your Current Level
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+              {tierInfo.name}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4, opacity: 0.65, fontFamily: FONT.m }}>
+              {member.id} · {tierInfo.earn}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.6, marginBottom: 2 }}>
+              Points
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 32, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1 }}>
+              {points.toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div
+          style={{
+            position: "relative",
+            height: 6,
+            borderRadius: 9999,
+            background: "rgba(26, 29, 39, 0.15)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute", left: 0, top: 0, bottom: 0,
+              width: pct + "%",
+              background: tierId === "corporate" || tierId === "staff"
+                ? "linear-gradient(90deg, " + V2.goldSoft + " 0%, " + V2.gold + " 100%)"
+                : "linear-gradient(90deg, rgba(26, 29, 39, 0.4) 0%, rgba(26, 29, 39, 0.75) 100%)",
+              borderRadius: 9999,
+              transition: "width 600ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+            }}
+          />
+        </div>
+        <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+          {caption}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function V2StatCard({ label, value, actionLabel, onAction, accent, sub }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <div
+      style={{
+        flex: 1,
+        background: V2.card,
+        borderRadius: 16,
+        padding: 18,
+        border: "1px solid " + V2.divider,
+        boxShadow: "0 1px 0 rgba(242, 243, 245, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25)",
+      }}
+    >
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em", color: accent || V2.text, lineHeight: 1, marginBottom: sub ? 4 : 12 }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 11, color: V2.textMuted, marginBottom: 12 }}>
+          {sub}
+        </div>
+      )}
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          onMouseDown={() => setPressed(true)}
+          onMouseUp={() => setPressed(false)}
+          onMouseLeave={() => setPressed(false)}
+          style={{
+            background: "transparent",
+            color: V2.gold,
+            border: "1px solid " + V2.goldBorder,
+            borderRadius: 9999,
+            padding: "6px 14px",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+            cursor: "pointer",
+            fontFamily: FONT.b,
+            transform: pressed ? "scale(0.97)" : "scale(1)",
+            transition: "transform 120ms",
+          }}
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function V2PillToggle({ options, activeKey, onChange }) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        background: V2.elevated,
+        borderRadius: 9999,
+        padding: 4,
+        gap: 2,
+      }}
+    >
+      {options.map(opt => (
+        <button
+          key={opt.key}
+          onClick={() => onChange(opt.key)}
+          style={{
+            padding: "8px 18px",
+            borderRadius: 9999,
+            border: "none",
+            fontFamily: FONT.b,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            background: activeKey === opt.key ? V2.gold : "transparent",
+            color: activeKey === opt.key ? V2.textOnGold : V2.textSecondary,
+            transition: "background 200ms ease-out, color 200ms ease-out",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function V2TierSummaryCard({ tierId, info, isActive, onSelect }) {
+  const gradient = V2_TIER_GRADIENTS[tierId];
+  const ink = V2_TIER_INK[tierId];
+  const [pressed, setPressed] = useState(false);
+  return (
+    <div
+      onClick={onSelect}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        position: "relative",
+        borderRadius: 16,
+        padding: 20,
+        background: gradient,
+        color: ink,
+        overflow: "hidden",
+        marginBottom: 12,
+        cursor: "pointer",
+        transform: pressed ? "scale(0.98)" : "scale(1)",
+        transition: "transform 120ms",
+        border: isActive ? "2px solid " + V2.gold : "2px solid transparent",
+        boxShadow: isActive ? "0 0 32px rgba(245, 215, 166, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35)" : "0 8px 24px rgba(0, 0, 0, 0.25)",
+      }}
+    >
+      <div
+        aria-hidden
+        className="v2-sheen-overlay"
+        style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.1) 45%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.1) 55%, transparent 100%)",
+          transform: "translateX(-60%)",
+          animation: "v2-sheen 8s linear infinite",
+        }}
+      />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.65, marginBottom: 3 }}>
+              {info.fee}
+            </div>
+            <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 600, lineHeight: 1.1 }}>
+              {info.name}
+            </div>
+          </div>
+          {isActive && (
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 9999, background: "rgba(26, 29, 39, 0.2)" }}>
+              Current
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 10 }}>{info.earn} · {info.bday} birthday</div>
+        <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.5 }}>
+          {info.benefits.slice(0, 3).map((b, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, marginBottom: 2 }}>
+              <span>✦</span><span>{b}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function V2BottomNav({ view, setView, classic, hasUnscannedVoucher }) {
+  // 5-tab bottom nav with centre Scan FAB (raised).
+  // Mapping: Home → HOME · Rewards → REWARDS · [Scan] → WALLET (until S7 lands)
+  // · Points → HISTORY · City → EXPLORE.
+  const tabs = [
+    { key: "home",    label: "Home",    icon: "⌂", v: VIEW.HOME },
+    { key: "rewards", label: "Rewards", icon: "✦", v: VIEW.REWARDS },
+    { key: "scan",    label: "Scan",    isFab: true, v: VIEW.WALLET },
+    { key: "points",  label: "Points",  icon: "◆", v: VIEW.HISTORY },
+    { key: "city",    label: "City",    icon: "◉", v: VIEW.EXPLORE },
+  ];
+
+  const [fabPressed, setFabPressed] = useState(false);
+
+  return (
+    <nav
+      style={{
+        position: "fixed", bottom: 0, left: "50%",
+        transform: "translateX(-50%)",
+        width: "100%", maxWidth: 480,
+        height: 72,
+        background: "rgba(26, 29, 39, 0.88)",
+        backdropFilter: "blur(16px) saturate(120%)",
+        WebkitBackdropFilter: "blur(16px) saturate(120%)",
+        borderTop: "1px solid " + V2.divider,
+        display: "flex", alignItems: "center", justifyContent: "space-around",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        zIndex: 99,
+      }}
+    >
+      {tabs.map(tab => {
+        if (tab.isFab) {
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setView(tab.v)}
+              onMouseDown={() => setFabPressed(true)}
+              onMouseUp={() => setFabPressed(false)}
+              onMouseLeave={() => setFabPressed(false)}
+              aria-label="Scan"
+              style={{
+                width: 56, height: 56, borderRadius: "50%",
+                background: "linear-gradient(135deg, " + V2.goldSoft + " 0%, " + V2.gold + " 100%)",
+                border: "none", cursor: "pointer",
+                boxShadow: "0 0 32px rgba(245, 215, 166, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4)",
+                transform: "translateY(-12px) " + (fabPressed ? "scale(0.94)" : "scale(1)"),
+                color: V2.textOnGold,
+                fontSize: 22, fontWeight: 600,
+                fontFamily: FONT.b,
+                transition: "transform 120ms",
+                animation: hasUnscannedVoucher ? "v2-pulse 2s ease-in-out infinite" : "none",
+              }}
+            >
+              ◉
+            </button>
+          );
+        }
+        const active = view === tab.v;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => setView(tab.v)}
+            style={{
+              flex: 1, background: "transparent", border: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+              color: active ? V2.gold : V2.textSecondary,
+              fontFamily: FONT.b, fontSize: 10, fontWeight: active ? 600 : 500,
+              padding: "4px 0",
+            }}
+          >
+            <span style={{ fontSize: 18 }}>{tab.icon}</span>
+            {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ─── S3: Home / Tier + Points Hero ───────────────────────────────────────
+function HomeV2({ member, transactions, vouchers, giftCards, tiers, rewards, setView, reload }) {
+  const tierId = member.tier || "silver";
+  const tierInfo = TIER_INFO[tierId] || TIER_INFO.silver;
+  const isSilver = tierId === "silver";
+  const [toggle, setToggle] = useState("rewards"); // 'rewards' | 'tiers'
+  const [search, setSearch] = useState("");
+
+  const vouchersRemaining = member.vouchers_remaining != null ? member.vouchers_remaining : (tierInfo.vCount || 0);
+  const stamps = member.stamps || 0;
+  const individualVouchers = (vouchers || []).filter(v => v.status === "active" || v.status === "pending_scan").length;
+
+  const firstName = (member.name || "").split(" ")[0] || "there";
+  const tierOrder = ["silver", "gold", "platinum", "corporate", "staff"];
+
+  const filteredRewards = (rewards || []).filter(r => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (r.name || "").toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q);
+  });
+
+  return (
+    <div
+      style={{
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        minHeight: "100vh",
+        padding: "24px 20px 100px",
+        animation: "v2-fade-in 400ms ease-out",
+      }}
+    >
+      <V2Styles />
+
+      {/* Greeting row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textMuted, marginBottom: 4 }}>
+            ✦ 1-Insider
+          </div>
+          <div style={{ fontFamily: FONT.h, fontSize: 24, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text }}>
+            Welcome, {firstName}
+          </div>
+        </div>
+        <div
+          style={{
+            width: 40, height: 40, borderRadius: 9999,
+            background: V2.card, border: "1px solid " + V2.divider,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: V2.textSecondary, fontSize: 18, cursor: "pointer",
+          }}
+          title="Notifications"
+        >
+          ◉
+        </div>
+      </div>
+
+      {/* Tier hero */}
+      <V2TierHero member={member} />
+
+      {/* U11 — Silver members only: upgrade CTA pill */}
+      {isSilver && (
+        <div
+          onClick={() => setView(VIEW.PROFILE)}
+          style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "12px 16px",
+            background: "rgba(245, 215, 166, 0.1)",
+            border: "1px solid " + V2.goldBorder,
+            borderRadius: 12,
+            marginBottom: 16,
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: V2.gold, marginBottom: 2 }}>
+              ✦ Upgrade
+            </div>
+            <div style={{ fontSize: 13, color: V2.text }}>
+              Unlock Gold for <span style={{ fontWeight: 600 }}>$40/yr</span> — more vouchers, priority reservations.
+            </div>
+          </div>
+          <div style={{ color: V2.gold, fontSize: 18, fontWeight: 600 }}>→</div>
+        </div>
+      )}
+
+      {/* Twin stat cards */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        <V2StatCard
+          label="Vouchers"
+          value={vouchersRemaining + "/" + (tierInfo.vCount || 0)}
+          sub={tierInfo.nonStop ? "Non-Stop Hits active" : "Welcome voucher"}
+          actionLabel={individualVouchers > 0 ? "View wallet (" + individualVouchers + ")" : "View wallet"}
+          onAction={() => setView(VIEW.WALLET)}
+        />
+        <V2StatCard
+          label="Café Stamps"
+          value={stamps + "/10"}
+          sub={stamps >= 10 ? "Card complete" : stamps + " of 10 collected"}
+          actionLabel="See stamps"
+          onAction={() => setView(VIEW.STAMPS)}
+          accent={stamps >= 10 ? V2.gold : undefined}
+        />
+      </div>
+
+      {/* Rewards / Tiers toggle */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+        <V2PillToggle
+          options={[
+            { key: "rewards", label: "Rewards" },
+            { key: "tiers", label: "Tiers" },
+          ]}
+          activeKey={toggle}
+          onChange={setToggle}
+        />
+      </div>
+
+      {/* Search (rewards only) */}
+      {toggle === "rewards" && (
+        <div style={{ marginBottom: 16 }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search rewards…"
+            style={{
+              width: "100%",
+              background: V2.card,
+              border: "1px solid " + V2.divider,
+              borderRadius: 10,
+              padding: "12px 16px",
+              color: V2.text,
+              fontFamily: FONT.b,
+              fontSize: 14,
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Content: Rewards grid OR Tiers summary */}
+      {toggle === "rewards" ? (
+        filteredRewards.length === 0 ? (
+          <div style={{ padding: 24, textAlign: "center", color: V2.textMuted, fontSize: 13 }}>
+            {search ? "No rewards match " + JSON.stringify(search) : "No rewards available right now."}
+          </div>
+        ) : (
+          <div>
+            {filteredRewards.slice(0, 6).map(r => (
+              <div
+                key={r.id}
+                onClick={() => setView(VIEW.REWARDS)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: 14,
+                  background: V2.card,
+                  border: "1px solid " + V2.divider,
+                  borderRadius: 12,
+                  marginBottom: 10,
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{
+                  width: 48, height: 48, borderRadius: 10,
+                  background: V2.elevated,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22, color: V2.gold,
+                }}>✦</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: V2.text }}>{r.name}</div>
+                  <div style={{ fontSize: 11, color: V2.textMuted, marginTop: 2 }}>
+                    {r.points_cost ? r.points_cost.toLocaleString() + " pts" : "Free"} · {r.category || "Rewards"}
+                  </div>
+                </div>
+                <div style={{ color: V2.textMuted, fontSize: 16 }}>›</div>
+              </div>
+            ))}
+            {filteredRewards.length > 6 && (
+              <div
+                onClick={() => setView(VIEW.REWARDS)}
+                style={{ textAlign: "center", padding: 12, fontSize: 12, fontWeight: 600, color: V2.gold, cursor: "pointer" }}
+              >
+                View all {filteredRewards.length} rewards →
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        <div>
+          {tierOrder.filter(t => TIER_INFO[t]).map(t => (
+            <V2TierSummaryCard
+              key={t}
+              tierId={t}
+              info={TIER_INFO[t]}
+              isActive={t === tierId}
+              onSelect={() => setView(VIEW.PROFILE)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function App() {
   const classic = useClassicMode();
   const [view, setView] = useState(VIEW.LANDING);
@@ -1072,7 +1631,7 @@ export default function App() {
         "* { box-sizing: border-box; margin: 0; padding: 0; }"
       }</style>
 
-      {view !== VIEW.LANDING && (
+      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && (
         <div style={s.header}>
           <div style={s.logo}>✦ 1-INSIDER</div>
           {member && (
@@ -1112,7 +1671,10 @@ export default function App() {
         ? <SignIn onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
         : <SignInV2 onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }} onBack={() => setView(VIEW.LANDING)} />
       )}
-      {view === VIEW.HOME && member && <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />}
+      {view === VIEW.HOME && member && (classic
+        ? <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />
+        : <HomeV2 member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} tiers={tiers} rewards={rewards} setView={setView} reload={() => loadMemberData(member.id)} />
+      )}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.PROFILE && member && <Profile member={member} tiers={tiers} signOut={signOut} reload={() => loadMemberData(member.id)} />}
@@ -1121,7 +1683,7 @@ export default function App() {
       {view === VIEW.EXPLORE && member && <ExploreOutlets member={member} stores={stores} setView={setView} />}
       {view === VIEW.HISTORY && member && <HistoryView member={member} setView={setView} />}
 
-      {member && view >= VIEW.HOME && (
+      {member && view >= VIEW.HOME && (classic ? (
         <div style={s.bottomNav}>
           {[
             { icon: "🏠", label: "Home", v: VIEW.HOME },
@@ -1135,7 +1697,14 @@ export default function App() {
             </div>
           ))}
         </div>
-      )}
+      ) : (
+        <V2BottomNav
+          view={view}
+          setView={setView}
+          classic={classic}
+          hasUnscannedVoucher={(vouchers || []).some(v => v.status === "pending_scan")}
+        />
+      ))}
     </div>
   );
 }
