@@ -233,7 +233,7 @@ const VENUE_DIRECTORY = [
   },
 ];
 
-const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8, HISTORY: 9 };
+const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8, HISTORY: 9, EVENTS: 10 };
 
 const s = {
   app: { fontFamily: FONT.b, background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" },
@@ -1769,7 +1769,7 @@ function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, t
         <V2ShelfHeader
           title="Events"
           count={visibleEvents.length > 0 ? visibleEvents.length : null}
-          onSeeAll={visibleEvents.length > 0 ? () => setView(VIEW.EXPLORE) : null}
+          onSeeAll={visibleEvents.length > 0 ? () => setView(VIEW.EVENTS) : null}
         />
         {visibleEvents.length > 0 ? (
           <V2Shelf>
@@ -3283,6 +3283,421 @@ function QrScanPayV2({ member, vouchers, venueName, tabAmount, onClose }) {
 }
 
 
+// ─── S8: Activations / Events Feed ────────────────────────────────────────
+
+function V2HeroEventCard({ event, onRsvp }) {
+  const [pressed, setPressed] = useState(false);
+  const isExclusive = Array.isArray(event.tier_exclusive) && event.tier_exclusive.length > 0;
+  const statusText =
+    event.status === "open" ? "Booking open" :
+    event.status === "waitlist" ? "Waitlist" :
+    event.status === "soldout" ? "Sold out" :
+    event.status;
+  const statusColor = event.status === "open" ? V2.gold : event.status === "waitlist" ? V2.info : V2.textMuted;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        aspectRatio: "16/21",
+        minHeight: 360,
+        borderRadius: 20,
+        overflow: "hidden",
+        background: V2.elevated,
+        marginBottom: 24,
+        boxShadow: "0 12px 40px rgba(0, 0, 0, 0.35)",
+      }}
+    >
+      {event.hero_image_url && (
+        <img
+          src={event.hero_image_url}
+          alt=""
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9)" }}
+        />
+      )}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(180deg, rgba(15,17,26,0.2) 0%, rgba(15,17,26,0.35) 50%, rgba(15,17,26,0.95) 100%)",
+        }}
+      />
+
+      {/* Top row: featured tag + members-only badge */}
+      <div style={{ position: "absolute", top: 16, left: 16, right: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase",
+            color: V2.gold,
+            padding: "5px 11px",
+            borderRadius: 9999,
+            background: "rgba(15, 17, 26, 0.7)",
+            border: "1px solid " + V2.goldBorder,
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          ✦ Featured
+        </div>
+        {isExclusive && (
+          <div
+            style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
+              color: V2.gold,
+              padding: "5px 11px",
+              borderRadius: 9999,
+              background: "rgba(15, 17, 26, 0.7)",
+              border: "1px solid " + V2.goldBorder,
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+            }}
+          >
+            ✦ Members only
+          </div>
+        )}
+      </div>
+
+      {/* Bottom content */}
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, color: V2.text }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, fontSize: 10, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor }} />
+          <span style={{ color: statusColor }}>{statusText}</span>
+        </div>
+        <div style={{ fontFamily: FONT.h, fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.15, marginBottom: 8 }}>
+          {event.title}
+        </div>
+        <div style={{ fontSize: 13, color: V2.textSecondary, marginBottom: 14, lineHeight: 1.5 }}>
+          {event.venue_name} · {v2FormatDateTime(event.starts_at)}
+        </div>
+        {event.description && (
+          <div
+            style={{
+              fontSize: 12, color: V2.textSecondary, marginBottom: 16, lineHeight: 1.55,
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+            }}
+          >
+            {event.description}
+          </div>
+        )}
+
+        <button
+          onClick={() => onRsvp(event)}
+          onMouseDown={() => setPressed(true)}
+          onMouseUp={() => setPressed(false)}
+          onMouseLeave={() => setPressed(false)}
+          style={{
+            display: "inline-block",
+            padding: "12px 22px",
+            background: V2.gold,
+            color: V2.textOnGold,
+            border: "none",
+            borderRadius: 9999,
+            fontSize: 13, fontWeight: 700, letterSpacing: "0.05em",
+            cursor: "pointer",
+            fontFamily: FONT.b,
+            transform: pressed ? "scale(0.98)" : "scale(1)",
+            transition: "transform 120ms ease-out",
+            boxShadow: "0 4px 14px rgba(245, 215, 166, 0.25)",
+          }}
+        >
+          {event.status === "waitlist" ? "Join the waitlist →" : "Reserve your seat →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function V2EventRow({ event, onRsvp, index }) {
+  const [pressed, setPressed] = useState(false);
+  const isExclusive = Array.isArray(event.tier_exclusive) && event.tier_exclusive.length > 0;
+  const statusText =
+    event.status === "open" ? "Open" :
+    event.status === "waitlist" ? "Waitlist" :
+    event.status === "soldout" ? "Sold out" :
+    event.status;
+  const statusColor = event.status === "open" ? V2.gold : event.status === "waitlist" ? V2.info : V2.textMuted;
+
+  return (
+    <button
+      onClick={() => onRsvp(event)}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        width: "100%", padding: 10,
+        background: V2.card,
+        border: "1px solid " + V2.divider,
+        borderRadius: 14,
+        cursor: "pointer",
+        textAlign: "left",
+        marginBottom: 10,
+        transform: pressed ? "scale(0.99)" : "scale(1)",
+        transition: "transform 120ms ease-out",
+        animation: "v2-fade-in 400ms ease-out " + (index * 40) + "ms both",
+      }}
+    >
+      <div style={{ position: "relative", width: 96, height: 96, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: V2.elevated }}>
+        {event.hero_image_url && (
+          <img src={event.hero_image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.9)" }} />
+        )}
+        <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.4) 100%)" }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor }} />
+          <span style={{ color: statusColor }}>{statusText}</span>
+          {isExclusive && <span style={{ color: V2.gold, marginLeft: 4 }}>· ✦ Members only</span>}
+        </div>
+        <div style={{ fontFamily: FONT.h, fontSize: 15, fontWeight: 600, color: V2.text, marginBottom: 3, lineHeight: 1.2 }}>
+          {event.title}
+        </div>
+        <div style={{ fontSize: 11, color: V2.textMuted, lineHeight: 1.4 }}>
+          {event.venue_name} · {v2FormatDateTime(event.starts_at)}
+        </div>
+      </div>
+      <div style={{ color: V2.textMuted, fontSize: 18, paddingRight: 6 }}>›</div>
+    </button>
+  );
+}
+
+function V2ComingSoonPanel({ title, description, eta }) {
+  return (
+    <div
+      style={{
+        padding: "40px 24px",
+        background: V2.card,
+        border: "1px dashed " + V2.dividerStrong,
+        borderRadius: 16,
+        textAlign: "center",
+        marginTop: 12,
+      }}
+    >
+      <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.6 }}>◐</div>
+      <div style={{ fontFamily: FONT.h, fontSize: 20, fontWeight: 600, color: V2.text, marginBottom: 8, letterSpacing: "-0.01em" }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 12, color: V2.textSecondary, lineHeight: 1.6, maxWidth: 320, margin: "0 auto 12px" }}>
+        {description}
+      </div>
+      {eta && (
+        <div
+          style={{
+            display: "inline-block",
+            padding: "5px 12px",
+            borderRadius: 9999,
+            border: "1px solid " + V2.goldBorder,
+            color: V2.gold,
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase",
+          }}
+        >
+          {eta}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActivationsV2({ member, events, setView }) {
+  const [tab, setTab] = useState("events");
+  const [rsvp, setRsvp] = useState(null);
+  const tierId = (member && member.tier) || "silver";
+
+  const visibleEvents = (events || [])
+    .filter(e => v2EventVisibleToTier(e, tierId))
+    .filter(e => e.status === "open" || e.status === "waitlist" || e.status === "soldout");
+
+  const featured = visibleEvents[0];
+  const rest = visibleEvents.slice(1);
+
+  const handleRsvp = (event) => {
+    if (event.booking_url) {
+      window.open(event.booking_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setRsvp(event);
+  };
+
+  return (
+    <div
+      style={{
+        background: V2.bg,
+        color: V2.text,
+        fontFamily: FONT.b,
+        minHeight: "100vh",
+        padding: "24px 20px 100px",
+        animation: "v2-fade-in 400ms ease-out",
+      }}
+    >
+      <V2Styles />
+
+      {/* Header with back */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <button
+          onClick={() => setView(VIEW.HOME)}
+          aria-label="Back"
+          style={{
+            width: 36, height: 36, borderRadius: "50%",
+            background: V2.card, border: "1px solid " + V2.divider,
+            color: V2.text, fontSize: 18, cursor: "pointer", fontFamily: FONT.b,
+          }}
+        >‹</button>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textMuted, marginBottom: 6 }}>
+          ✦ Activations
+        </div>
+        <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text, marginBottom: 6, lineHeight: 1.1 }}>
+          What's on at 1-Group
+        </div>
+        <div style={{ fontSize: 13, color: V2.textSecondary, lineHeight: 1.5 }}>
+          Tastings, chef's tables, screenings, and private room takeovers — across all 11 venues.
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4 }}>
+        {[
+          { key: "events",      label: "Events" },
+          { key: "tables",      label: "Tables" },
+          { key: "private",     label: "Private rooms" },
+          { key: "screenings",  label: "Screenings" },
+        ].map(t => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                flexShrink: 0,
+                padding: "8px 15px",
+                borderRadius: 9999,
+                border: "1px solid " + (active ? V2.goldBorder : V2.divider),
+                background: active ? "rgba(245, 215, 166, 0.12)" : "transparent",
+                color: active ? V2.gold : V2.textSecondary,
+                fontFamily: FONT.b, fontSize: 12, fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "border-color 200ms, background 200ms, color 200ms",
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* EVENTS tab */}
+      {tab === "events" && (
+        <>
+          {featured && <V2HeroEventCard event={featured} onRsvp={handleRsvp} />}
+
+          {rest.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 600, color: V2.text, marginBottom: 12, padding: "0 4px", letterSpacing: "-0.01em" }}>
+                This week
+              </div>
+              {rest.map((e, i) => (
+                <V2EventRow key={e.id} index={i} event={e} onRsvp={handleRsvp} />
+              ))}
+            </div>
+          )}
+
+          {!featured && (
+            <V2ComingSoonPanel
+              title="No activations right now"
+              description="We're curating something special — check back soon for members-only sessions, tastings, and chef's table nights."
+            />
+          )}
+        </>
+      )}
+
+      {/* TABLES tab */}
+      {tab === "tables" && (
+        <V2ComingSoonPanel
+          title="Table reservations"
+          description="Book any 1-Group restaurant without leaving the app. SevenRooms integration will unlock live availability, party-size selection, and confirmations straight to your inbox."
+          eta="Q2 2026"
+        />
+      )}
+
+      {/* PRIVATE ROOMS tab */}
+      {tab === "private" && (
+        <V2ComingSoonPanel
+          title="Private rooms"
+          description="Fourteen private dining rooms across our venues — from intimate 6-seat tables to 50-guest takeovers. Submit enquiries straight through the app once live."
+          eta="Coming soon"
+        />
+      )}
+
+      {/* SCREENINGS tab */}
+      {tab === "screenings" && (
+        <V2ComingSoonPanel
+          title="Screenings"
+          description="Members-only film nights and curated tastings in partnership with independent cinemas. First event at The Summer House in late 2026."
+          eta="Late 2026"
+        />
+      )}
+
+      {/* RSVP confirmation placeholder (when booking_url is null) */}
+      {rsvp && (
+        <div
+          onClick={() => setRsvp(null)}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(15, 17, 26, 0.7)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            zIndex: 300,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 24,
+            animation: "v2-fade-in 220ms ease-out",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 360,
+              background: V2.card,
+              border: "1px solid " + V2.goldBorder,
+              borderRadius: 18,
+              padding: 24,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 32, marginBottom: 10 }}>✦</div>
+            <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 600, color: V2.text, marginBottom: 8 }}>
+              RSVP registered
+            </div>
+            <div style={{ fontSize: 12, color: V2.textSecondary, lineHeight: 1.5, marginBottom: 18 }}>
+              We've logged your interest for <strong>{rsvp.title}</strong>. Our team will confirm your seat by email shortly.
+            </div>
+            <button
+              onClick={() => setRsvp(null)}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                background: V2.gold,
+                color: V2.textOnGold,
+                border: "none",
+                borderRadius: 10,
+                fontSize: 13, fontWeight: 700, letterSpacing: "0.05em",
+                fontFamily: FONT.b,
+                cursor: "pointer",
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function App() {
   const classic = useClassicMode();
   const [view, setView] = useState(VIEW.LANDING);
@@ -3351,7 +3766,7 @@ export default function App() {
         "* { box-sizing: border-box; margin: 0; padding: 0; }"
       }</style>
 
-      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && !(view === VIEW.HISTORY && !classic) && (
+      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && !(view === VIEW.HISTORY && !classic) && !(view === VIEW.EVENTS && !classic) && (
         <div style={s.header}>
           <div style={s.logo}>✦ 1-INSIDER</div>
           {member && (
@@ -3407,6 +3822,9 @@ export default function App() {
       {view === VIEW.HISTORY && member && (classic
         ? <HistoryView member={member} setView={setView} />
         : <ReceiptsHistoryV2 member={member} receipts={receipts} setView={setView} />
+      )}
+      {view === VIEW.EVENTS && member && !classic && (
+        <ActivationsV2 member={member} events={events} setView={setView} />
       )}
 
       {member && view >= VIEW.HOME && (classic ? (
