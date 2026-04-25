@@ -2510,7 +2510,7 @@ function V2BottomNav({ view, setView, classic, hasUnscannedVoucher, onScan }) {
 }
 
 // ─── S3: Home / Tier + Points Hero ───────────────────────────────────────
-function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, tiers, rewards, setView, reload }) {
+function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, tiers, rewards, setView, reload, onPay }) {
   const tierId = member.tier || "silver";
   const tierInfo = TIER_INFO[tierId] || TIER_INFO.silver;
   const isSilver = tierId === "silver";
@@ -2606,13 +2606,13 @@ function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, t
       )}
 
       {/* ─── S4: Pay / Bookings / Events — stacked below the tier hero ─── */}
-      {/* Pay with the app card — routes to Wallet until S6/S7 land */}
+      {/* Pay with the app — opens QrScanPayV2 (S7) directly */}
       <V2ActionCard
         label="Pay with the app"
-        title="View and pay for your open tab"
-        caption="Scan, split, and earn points on every bill at any 1-Group venue"
-        pillLabel="View"
-        onClick={() => setView(VIEW.WALLET)}
+        title="Open your tab and pay in-app"
+        caption="Scan to open your bill, redeem points, and earn on every check at any 1-Group venue"
+        pillLabel="Pay now"
+        onClick={() => (onPay ? onPay() : setView(VIEW.WALLET))}
       />
 
       {/* Upcoming bookings shelf */}
@@ -4744,7 +4744,7 @@ export default function App() {
       )}
       {view === VIEW.HOME && member && (classic
         ? <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />
-        : <HomeV2 member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} bookings={bookings} events={events} tiers={tiers} rewards={rewards} setView={setView} reload={() => loadMemberData(member.id)} />
+        : <HomeV2 member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} bookings={bookings} events={events} tiers={tiers} rewards={rewards} setView={setView} reload={() => loadMemberData(member.id)} onPay={() => setShowPay(true)} />
       )}
       {view === VIEW.REWARDS && member && <RewardsView member={member} rewards={rewards} reload={() => loadMemberData(member.id)} />}
       {view === VIEW.STAMPS && member && <StampsView member={member} reload={() => loadMemberData(member.id)} />}
