@@ -295,6 +295,7 @@ function V2Styles() {
       "@keyframes v2-slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }" +
       "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
       "@keyframes v2-fab-ignite { 0% { box-shadow: 0 0 0 0 rgba(245,215,166,0.5); } 100% { box-shadow: 0 0 0 80px rgba(245,215,166,0); } }" +
+      "@keyframes v2-foil-shimmer { 0% { background-position: 200% 0%, 0% 0%; } 100% { background-position: -100% 0%, 0% 0%; } }" +
       "@keyframes v2-gold-shimmer { 0% { background-position: 200% 50%; } 50% { background-position: 0% 50%; } 100% { background-position: -200% 50%; } }" +
       "@keyframes v2-page-curl-down { 0% { transform: rotateX(0deg); transform-origin: top center; } 100% { transform: rotateX(-95deg); transform-origin: top center; } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
@@ -339,6 +340,27 @@ function V2Badge() {
 }
 
 // Circular gold FAB with built-in press state.
+// ─── Gold foil palette — sampled from gold_foil.png reference ────────────
+// Deep saturated honey gold with multi-stop horizontal sheen + dark accent
+// for the polished foil look on FAB, primary button, and rich gold accents.
+const V2_GOLD_FOIL_BG =
+  "linear-gradient(135deg, " +
+    "#B88320 0%, " +     // deep amber edge
+    "#D4A42D 25%, " +    // warm midtone
+    "#F6E5A0 45%, " +    // bright highlight crest
+    "#E8C355 60%, " +    // returning gold
+    "#C99725 80%, " +    // deep gold
+    "#8B5F18 100%" +     // shadow corner
+  ")";
+// Glossy overlay shimmer — subtle moving highlight that catches the eye
+// when applied as a second background layer.
+const V2_GOLD_FOIL_SHEEN =
+  "linear-gradient(105deg, " +
+    "transparent 0%, transparent 40%, " +
+    "rgba(255, 245, 200, 0.45) 50%, " +
+    "transparent 60%, transparent 100%)";
+const V2_GOLD_FOIL_TEXT = "#3A2810"; // rich espresso brown for legible foreground on foil
+
 function V2GoldFAB({ onClick, children, ariaLabel, style, idlePulse }) {
   const [pressed, setPressed] = useState(false);
   return (
@@ -352,16 +374,21 @@ function V2GoldFAB({ onClick, children, ariaLabel, style, idlePulse }) {
       onTouchEnd={() => setPressed(false)}
       style={{
         width: 64, height: 64, borderRadius: "50%",
-        background: "linear-gradient(135deg, " + V2.goldSoft + " 0%, " + V2.gold + " 100%)",
-        color: V2.textOnGold,
+        background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
+        backgroundSize: "200% 100%, 100% 100%",
+        backgroundPosition: "0% 0%, 0% 0%",
+        color: V2_GOLD_FOIL_TEXT,
         border: "none",
         cursor: "pointer",
-        fontSize: 26, fontWeight: 600,
+        fontSize: 26, fontWeight: 700,
         fontFamily: FONT.b,
-        boxShadow: "0 0 32px rgba(245, 215, 166, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4)",
+        boxShadow: "0 0 0 1px rgba(255, 230, 150, 0.5) inset, 0 0 32px rgba(218, 165, 32, 0.45), 0 8px 24px rgba(0, 0, 0, 0.45)",
         transform: pressed ? "scale(0.94)" : "scale(1)",
         transition: "transform 120ms ease-out",
-        animation: idlePulse ? "v2-pulse 2s ease-in-out infinite" : "none",
+        animation: idlePulse
+          ? "v2-foil-shimmer 4s linear infinite, v2-pulse 2s ease-in-out infinite"
+          : "v2-foil-shimmer 4s linear infinite",
+        textShadow: "0 1px 0 rgba(255, 240, 200, 0.4)",
         ...style,
       }}
     >
@@ -374,18 +401,22 @@ function V2GoldFAB({ onClick, children, ariaLabel, style, idlePulse }) {
 function V2GoldButton({ children, onClick, variant, disabled, style }) {
   const [pressed, setPressed] = useState(false);
   const base = {
-    fontFamily: FONT.b, fontSize: 14, fontWeight: 600, letterSpacing: "0.02em",
+    fontFamily: FONT.b, fontSize: 14, fontWeight: 700, letterSpacing: "0.02em",
     borderRadius: 10, padding: "14px 24px", border: "none",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,
     width: "100%",
     transform: pressed ? "scale(0.97)" : "scale(1)",
     transition: "transform 120ms ease-out",
+    textShadow: "0 1px 0 rgba(255, 240, 200, 0.35)",
   };
   const variants = {
     solid: {
-      background: V2.gold, color: V2.textOnGold,
-      boxShadow: "0 0 0 1px " + V2.goldBorder + ", 0 0 24px rgba(245, 215, 166, 0.2)",
+      background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
+      backgroundSize: "200% 100%, 100% 100%",
+      color: V2_GOLD_FOIL_TEXT,
+      boxShadow: "0 0 0 1px rgba(255, 230, 150, 0.4) inset, 0 0 24px rgba(218, 165, 32, 0.35), 0 4px 14px rgba(0, 0, 0, 0.3)",
+      animation: "v2-foil-shimmer 5s linear infinite",
     },
     ghost: {
       background: "transparent", color: V2.gold,
@@ -651,7 +682,7 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
           ✦ 1-Group Singapore
         </div>
         <img
-          src="/insider-logo-gold.png"
+          src="/insider-logo-foil.png"
           alt="1-INSIDER"
           style={{
             width: 280, maxWidth: "78vw", height: "auto",
@@ -1073,7 +1104,7 @@ function SignInV2({ onSuccess, onBack, revealing }) {
               {/* Gold 1-INSIDER logo at top of login panel */}
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
                 <img
-                  src="/insider-logo-gold.png"
+                  src="/insider-logo-foil.png"
                   alt="1-INSIDER"
                   style={{
                     width: 180, maxWidth: "60%", height: "auto",
