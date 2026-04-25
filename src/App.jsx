@@ -495,10 +495,11 @@ function V2EnvelopeReveal({ onComplete }) {
     "42% 100%, 31% 95%, 22% 88%, 14% 80%, 7% 70%, 3% 58%, 0% 46%, " +
     "4% 34%, 10% 23%, 18% 14%, 28% 8%, 39% 3%)";
 
-  // Card is intentionally NARROWER than envelope so it visually fits
-  // inside the pocket. Envelope is 360px wide; card is 280px (78% of envW).
-  const cardW = 280;
-  const cardH = 200;
+  // Card is the SAME size as envelope so it visually fills the envelope
+  // pocket completely. The 'emerging from inside' effect comes from the
+  // front pocket panel covering the lower portion as card slides up.
+  const cardW = envW;
+  const cardH = envH;
 
   return (
     <div
@@ -513,218 +514,228 @@ function V2EnvelopeReveal({ onComplete }) {
         perspective: 1400,
       }}
     >
-      {/* OUTER STAGE — holds envelope and card as siblings, both centred */}
+      {/* OUTER STAGE — fixed centred container holds envelope and card as
+          siblings. Both centred via flexbox. No transforms here so child
+          animations don't fight a parent translate. */}
       <div
         style={{
           position: "relative",
           width: envW,
           height: envH,
           maxWidth: "85vw",
+          // Both card and envelope centred via flex parent above (the
+          // outer fixed div already does flex center). We position both
+          // children at top:0/left:0 and let them stack in the same spot.
         }}
       >
-        {/* INVITATION CARD — sibling of envelope, NOT child.
-            Renders BEHIND envelope (zIndex 1) until stage 4, when it slides
-            up over and beyond the envelope. Card is narrower than envelope
-            so when it slides up, it visibly emerges from inside the pocket.
-            Anchored at the same centre point as the envelope so both are
-            initially overlaid; the card is invisible behind the envelope
-            until it slides up. */}
+        {/* CARD CENTRING WRAPPER — keeps card locked at viewport centre.
+            Animation runs on the inner card so it doesn't overwrite the
+            centring transform. */}
         <div
           style={{
             position: "absolute",
-            left: "50%", top: "50%",
-            width: cardW, height: cardH,
-            // Initial transform: centred at the same spot as envelope.
-            // Stage 4: emerge animation slides card up.
-            // Stage 6: exit animation slides card down off screen.
-            transform: "translate(-50%, -50%)",
-            background: "#FFFFFF",
-            borderRadius: 4,
-            boxShadow: "0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(218, 165, 32, 0.7) inset",
-            // Stage 0-3: card is BEHIND envelope, hidden visually because
-            // envelope has higher zIndex. From stage 4 onwards, card jumps
-            // ABOVE envelope so it slides out and is visible.
+            top: 0, left: 0,
+            width: "100%", height: "100%",
             zIndex: stage >= 4 ? 6 : 1,
             opacity: stage >= 4 ? 1 : 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "20px 16px",
-            // Animations
-            animation: stage >= 6
-              ? "v2-card-exit 800ms cubic-bezier(0.55, 0.05, 0.85, 0.95) forwards"
-              : stage >= 4
-                ? "v2-card-emerge 2200ms cubic-bezier(0.25, 0.1, 0.25, 1) both"
-                : "none",
+            pointerEvents: "none",
           }}
         >
-          {/* Gold inner trim border */}
+          {/* INVITATION CARD — same dimensions as envelope. Animation lives
+              here, not on the wrapper, so translateY composes cleanly. */}
           <div
-            aria-hidden
             style={{
-              position: "absolute", inset: 6,
-              border: "0.5px solid rgba(218, 165, 32, 0.55)",
-              borderRadius: 2,
-              pointerEvents: "none",
+              position: "absolute",
+              top: 0, left: 0,
+              width: "100%", height: "100%",
+              background: "#FFFFFF",
+              borderRadius: 4,
+              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(218, 165, 32, 0.7) inset",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "20px 16px",
+              animation: stage >= 6
+                ? "v2-card-exit 800ms cubic-bezier(0.55, 0.05, 0.85, 0.95) forwards"
+                : stage >= 4
+                  ? "v2-card-emerge 2200ms cubic-bezier(0.25, 0.1, 0.25, 1) both"
+                  : "none",
             }}
-          />
-          <div style={{
-            textAlign: "center",
-            display: "flex", flexDirection: "column", alignItems: "center",
-            gap: 8,
-            width: "100%",
-            position: "relative", zIndex: 2,
-          }}>
+          >
+            {/* Gold inner trim border */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute", inset: 6,
+                border: "0.5px solid rgba(218, 165, 32, 0.55)",
+                borderRadius: 2,
+                pointerEvents: "none",
+              }}
+            />
             <div style={{
-              fontSize: 8, color: "#8B5F18", letterSpacing: "0.3em",
-              fontWeight: 700, fontFamily: FONT.b, opacity: 0.75,
+              textAlign: "center",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 10,
+              width: "100%",
+              position: "relative", zIndex: 2,
             }}>
-              YOUR EXCLUSIVE INVITATION
-            </div>
-            <V2InsiderLogo width={170} dropShadow={false} />
-            <div style={{
-              fontSize: 11, color: "#3A2810", marginTop: 4,
-              fontFamily: FONT.h, fontStyle: "italic",
-              lineHeight: 1.4,
-            }}>
-              Welcome to the inner circle.
-            </div>
-            <div style={{
-              fontSize: 7, color: "#8B5F18", letterSpacing: "0.25em",
-              fontFamily: FONT.b, opacity: 0.6, marginTop: 4,
-              borderTop: "0.5px solid rgba(218, 165, 32, 0.4)",
-              paddingTop: 6, width: 110,
-            }}>
-              1-GROUP SINGAPORE
+              <div style={{
+                fontSize: 9, color: "#8B5F18", letterSpacing: "0.3em",
+                fontWeight: 700, fontFamily: FONT.b, opacity: 0.75,
+              }}>
+                YOUR EXCLUSIVE INVITATION
+              </div>
+              <V2InsiderLogo width={200} dropShadow={false} />
+              <div style={{
+                fontSize: 12, color: "#3A2810", marginTop: 4,
+                fontFamily: FONT.h, fontStyle: "italic",
+                lineHeight: 1.4,
+              }}>
+                Welcome to the inner circle.
+              </div>
+              <div style={{
+                fontSize: 8, color: "#8B5F18", letterSpacing: "0.25em",
+                fontFamily: FONT.b, opacity: 0.6, marginTop: 4,
+                borderTop: "0.5px solid rgba(218, 165, 32, 0.4)",
+                paddingTop: 6, width: 130,
+              }}>
+                1-GROUP SINGAPORE
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ENVELOPE ASSEMBLY — sibling of card. Animates DOWN when card
-            emerges (stage 4+) so the focus stays on the card. Final
-            descend completes the envelope's exit; card stays centred for
-            the user to read before exiting via stage 6. */}
+        {/* ENVELOPE CENTRING WRAPPER — keeps envelope locked at viewport
+            centre. Animation runs on the inner element so its translateY
+            doesn't trample any centring transform. */}
         <div
           style={{
             position: "absolute",
-            left: "50%", top: "50%",
-            width: envW, height: envH,
-            maxWidth: "85vw",
-            transform: "translate(-50%, -50%)",
+            top: 0, left: 0,
+            width: "100%", height: "100%",
             zIndex: stage >= 4 ? 2 : 5,
-            animation: stage >= 4
-              ? "v2-envelope-descend 2200ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both"
-              : stage === 0
-                ? "v2-envelope-arrive 1000ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
-                : "none",
-            transformStyle: "preserve-3d",
           }}
         >
-          {/* ENVELOPE BODY (back panel) */}
-          <div
-            style={{
-              position: "absolute", inset: 0,
-              background: foilBg,
-              backgroundSize: "200% 100%, 100% 100%",
-              borderRadius: 6,
-              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 230, 150, 0.5) inset",
-              animation: "v2-foil-shimmer 4s linear infinite",
-              zIndex: 1,
-            }}
-          />
-          {/* FRONT POCKET — bottom half of envelope, pocket where card lives */}
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              bottom: 0, left: 0, right: 0,
-              height: "55%",
-              background: foilBg,
-              backgroundSize: "200% 100%, 100% 100%",
-              borderRadius: "0 0 6px 6px",
-              boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.2)",
-              animation: "v2-foil-shimmer 4s linear infinite",
-              zIndex: 3,
-              backgroundImage: foilBg + ", linear-gradient(135deg, transparent 49%, rgba(0,0,0,0.15) 50%, transparent 51%), linear-gradient(225deg, transparent 49%, rgba(0,0,0,0.15) 50%, transparent 51%)",
-            }}
-          />
-          {/* TOP FLAP — V-cut, rotates open at stage 3 */}
+          {/* ENVELOPE ASSEMBLY — runs arrive (stage 0) and descend (stage 4+) */}
           <div
             style={{
               position: "absolute",
-              top: 0, left: 0, right: 0,
-              height: flapH,
-              background: foilBg,
-              backgroundSize: "200% 100%, 100% 100%",
-              clipPath: "polygon(0 0, 100% 0, 50% 100%)",
-              transformOrigin: "top center",
-              animation: stage >= 3
-                ? "v2-flap-open 800ms cubic-bezier(0.45, 0.05, 0.4, 1) forwards, v2-foil-shimmer 4s linear infinite"
-                : "v2-foil-shimmer 4s linear infinite",
-              zIndex: 4,
-              filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))",
-            }}
-          />
-          {/* WAX SEAL — outer wrapper handles centering, inner runs animation */}
-          <div
-            style={{
-              position: "absolute",
-              left: "50%", top: "50%",
-              transform: stage >= 2
-                ? "translate(-50%, calc(-50% + 30px))"
-                : "translate(-50%, -50%)",
-              opacity: stage >= 2 ? 0 : 1,
-              transition: stage >= 2
-                ? "opacity 400ms ease-in, transform 400ms cubic-bezier(0.55, 0.05, 0.85, 0.95)"
-                : "none",
-              width: 88, height: 88,
-              zIndex: 6,
-              pointerEvents: "none",
+              top: 0, left: 0,
+              width: "100%", height: "100%",
+              animation: stage >= 4
+                ? "v2-envelope-descend 2200ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both"
+                : stage === 0
+                  ? "v2-envelope-arrive 1000ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                  : "none",
+              transformStyle: "preserve-3d",
             }}
           >
+            {/* ENVELOPE BODY (back panel) */}
             <div
               style={{
                 position: "absolute", inset: 0,
-                animation: stage === 0
-                  ? "v2-seal-shine 1100ms cubic-bezier(0.34, 1.56, 0.64, 1) 400ms both"
+                background: foilBg,
+                backgroundSize: "200% 100%, 100% 100%",
+                borderRadius: 6,
+                boxShadow: "0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 230, 150, 0.5) inset",
+                animation: "v2-foil-shimmer 4s linear infinite",
+                zIndex: 1,
+              }}
+            />
+            {/* FRONT POCKET — bottom half of envelope */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                bottom: 0, left: 0, right: 0,
+                height: "55%",
+                background: foilBg,
+                backgroundSize: "200% 100%, 100% 100%",
+                borderRadius: "0 0 6px 6px",
+                boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.2)",
+                animation: "v2-foil-shimmer 4s linear infinite",
+                zIndex: 3,
+                backgroundImage: foilBg + ", linear-gradient(135deg, transparent 49%, rgba(0,0,0,0.15) 50%, transparent 51%), linear-gradient(225deg, transparent 49%, rgba(0,0,0,0.15) 50%, transparent 51%)",
+              }}
+            />
+            {/* TOP FLAP — V-cut, rotates open at stage 3 */}
+            <div
+              style={{
+                position: "absolute",
+                top: 0, left: 0, right: 0,
+                height: flapH,
+                background: foilBg,
+                backgroundSize: "200% 100%, 100% 100%",
+                clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+                transformOrigin: "top center",
+                animation: stage >= 3
+                  ? "v2-flap-open 800ms cubic-bezier(0.45, 0.05, 0.4, 1) forwards, v2-foil-shimmer 4s linear infinite"
+                  : "v2-foil-shimmer 4s linear infinite",
+                zIndex: 4,
+                filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))",
+              }}
+            />
+            {/* WAX SEAL */}
+            <div
+              style={{
+                position: "absolute",
+                left: "50%", top: "50%",
+                transform: stage >= 2
+                  ? "translate(-50%, calc(-50% + 30px))"
+                  : "translate(-50%, -50%)",
+                opacity: stage >= 2 ? 0 : 1,
+                transition: stage >= 2
+                  ? "opacity 400ms ease-in, transform 400ms cubic-bezier(0.55, 0.05, 0.85, 0.95)"
                   : "none",
+                width: 88, height: 88,
+                zIndex: 6,
+                pointerEvents: "none",
               }}
             >
               <div
-                aria-hidden
                 style={{
                   position: "absolute", inset: 0,
-                  background: "radial-gradient(circle at 32% 28%, #F6E5A0 0%, #D4A42D 22%, #B88320 55%, #8B5F18 85%, #5C3D14 100%)",
-                  clipPath: waxBlobClip,
-                  WebkitClipPath: waxBlobClip,
-                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.55)",
-                  filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))",
+                  animation: stage === 0
+                    ? "v2-seal-shine 1100ms cubic-bezier(0.34, 1.56, 0.64, 1) 400ms both"
+                    : "none",
                 }}
-              />
-              <div
-                aria-hidden
-                style={{
-                  position: "absolute", inset: "10%",
-                  background: "radial-gradient(circle at 35% 30%, rgba(255,230,150,0.4) 0%, rgba(0,0,0,0) 40%), radial-gradient(circle at 65% 70%, rgba(0,0,0,0.25) 30%, rgba(0,0,0,0) 60%)",
-                  borderRadius: "50%",
-                  pointerEvents: "none",
-                }}
-              />
-              <div
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  left: "50%", top: "50%",
-                  transform: "translate(-50%, -50%)",
-                  width: 42, height: 42,
-                  background: "linear-gradient(135deg, #5C3D14 0%, #3A2810 50%, #5C3D14 100%)",
-                  WebkitMaskImage: "url(/insider-keyhole-mask.png)",
-                  maskImage: "url(/insider-keyhole-mask.png)",
-                  WebkitMaskSize: "100% 100%",
-                  maskSize: "100% 100%",
-                  WebkitMaskRepeat: "no-repeat",
-                  maskRepeat: "no-repeat",
-                  filter: "drop-shadow(0 1px 0 rgba(255,240,200,0.45)) drop-shadow(0 -1px 0 rgba(0,0,0,0.4))",
-                }}
-              />
+              >
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute", inset: 0,
+                    background: "radial-gradient(circle at 32% 28%, #F6E5A0 0%, #D4A42D 22%, #B88320 55%, #8B5F18 85%, #5C3D14 100%)",
+                    clipPath: waxBlobClip,
+                    WebkitClipPath: waxBlobClip,
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.55)",
+                    filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))",
+                  }}
+                />
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute", inset: "10%",
+                    background: "radial-gradient(circle at 35% 30%, rgba(255,230,150,0.4) 0%, rgba(0,0,0,0) 40%), radial-gradient(circle at 65% 70%, rgba(0,0,0,0.25) 30%, rgba(0,0,0,0) 60%)",
+                    borderRadius: "50%",
+                    pointerEvents: "none",
+                  }}
+                />
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: "50%", top: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: 42, height: 42,
+                    background: "linear-gradient(135deg, #5C3D14 0%, #3A2810 50%, #5C3D14 100%)",
+                    WebkitMaskImage: "url(/insider-keyhole-mask.png)",
+                    maskImage: "url(/insider-keyhole-mask.png)",
+                    WebkitMaskSize: "100% 100%",
+                    maskSize: "100% 100%",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskRepeat: "no-repeat",
+                    filter: "drop-shadow(0 1px 0 rgba(255,240,200,0.45)) drop-shadow(0 -1px 0 rgba(0,0,0,0.4))",
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
