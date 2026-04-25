@@ -313,13 +313,14 @@ function V2Styles() {
         "0% { transform: rotateX(0deg); } " +
         "100% { transform: rotateX(-180deg); } " +
       "}" +
-      // Invitation card slides UP out of envelope. Stays the same size
-      // (scale 1) so it never appears bigger than the envelope. Just
-      // translates upward — by the end its bottom edge sits at envelope's
-      // top edge, so the card has fully cleared the pocket.
+      // Invitation card slides UP out of envelope pocket. Anchored at
+      // bottom (transformOrigin: 'bottom center'), translates 70% upward
+      // so the bottom edge stays inside the pocket while the top half
+      // extends above the envelope's flap line — the "coming out" effect.
+      // 2200ms duration: deliberately slow for premium reveal cadence.
       "@keyframes v2-card-emerge { " +
         "0% { transform: translateY(0); opacity: 1; } " +
-        "100% { transform: translateY(-95%); opacity: 1; } " +
+        "100% { transform: translateY(-70%); opacity: 1; } " +
       "}" +
       // Envelope itself fades out as the card emerges and expands to full screen.
       "@keyframes v2-envelope-dissolve { " +
@@ -443,17 +444,19 @@ function V2EnvelopeReveal({ onComplete }) {
   //   1 (1000-2300ms) Hold beat — gold foil shimmer plays
   //   2 (2300-2700ms) Wax seal breaks and falls away
   //   3 (2700-3500ms) Top flap rotates open (held in opened position)
-  //   4 (3500-4500ms) Invitation card slides up out of envelope
-  //   5 (4500-5000ms) Card scales out, envelope dissolves
+  //   4 (3500-5700ms) Invitation card slides up out of envelope (2200ms)
+  //   5 (5700-6700ms) Card holds fully emerged briefly so user can read it
+  //   6 (6700-7400ms) Card scales out, envelope dissolves
   useEffect(() => {
     const t1 = setTimeout(() => setStage(1), 1000);  // arrive complete
     const t2 = setTimeout(() => setStage(2), 2300);  // seal breaks
     const t3 = setTimeout(() => setStage(3), 2700);  // flap opens
     const t4 = setTimeout(() => setStage(4), 3500);  // card slides up
-    const t5 = setTimeout(() => setStage(5), 4500);  // card expands out
-    const t6 = setTimeout(() => onComplete && onComplete(), 5000);
+    const t5 = setTimeout(() => setStage(5), 5700);  // hold beat at full emerge
+    const t6 = setTimeout(() => setStage(6), 6700);  // card expands out
+    const t7 = setTimeout(() => onComplete && onComplete(), 7400);
     return () => {
-      [t1, t2, t3, t4, t5, t6].forEach(clearTimeout);
+      [t1, t2, t3, t4, t5, t6, t7].forEach(clearTimeout);
     };
   }, [onComplete]);
 
@@ -492,7 +495,7 @@ function V2EnvelopeReveal({ onComplete }) {
           position: "relative",
           width: envW, height: envH,
           maxWidth: "85vw",
-          animation: stage >= 5
+          animation: stage >= 6
             ? "v2-card-expand 900ms cubic-bezier(0.55, 0.05, 0.85, 0.95) forwards, v2-envelope-dissolve 900ms ease-in forwards"
             : stage === 0
               ? "v2-envelope-arrive 1000ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
@@ -500,51 +503,69 @@ function V2EnvelopeReveal({ onComplete }) {
           transformStyle: "preserve-3d",
         }}
       >
-        {/* INVITATION CARD — starts at zIndex 2 (hidden behind front panel
-            at zIndex 3). When stage 4 hits, jumps to zIndex 4 so it slides
-            up OVER the front panel — that's how a real card emerges from
-            an envelope pocket. */}
+        {/* INVITATION CARD — sits inside envelope pocket, taller than the
+            envelope itself. When stage 4 hits, slides up so the top portion
+            extends above the envelope (the "coming out of the envelope"
+            effect Chris referenced). The bottom stays anchored inside the
+            pocket, hidden by the front panel below the flap line.
+            White card stock with gold trim border for premium invitation feel. */}
         <div
           style={{
             position: "absolute",
-            left: "6%", right: "6%",
-            top: "10%", bottom: "10%",
-            background: "linear-gradient(135deg, #FFFCF5 0%, #FFF6E1 50%, #FFE9C2 100%)",
+            // Card is wider than envelope was — but constrained so it
+            // visually sits inside the pocket. left/right of 8% gives a
+            // bit more breathing room than the body.
+            left: "8%", right: "8%",
+            // Anchored to bottom of envelope (sits inside pocket), and
+            // taller than envelope so the upper portion can emerge above
+            // the flap line during slide.
+            bottom: "5%",
+            // Card height = roughly 1.4x of envelope height. When card
+            // translates up by ~70% of its own height (translateY(-70%)),
+            // its top edge sits well above envelope's top edge.
+            height: "140%",
+            background: "#FFFFFF",
             borderRadius: 4,
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(218, 165, 32, 0.4) inset",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(218, 165, 32, 0.6) inset, 0 0 0 6px #FFFFFF, 0 0 0 7px rgba(218, 165, 32, 0.65)",
             zIndex: stage >= 4 ? 4 : 2,
-            transformOrigin: "center center",
+            transformOrigin: "bottom center",
             animation: stage >= 4
-              ? "v2-card-emerge 1000ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both"
+              ? "v2-card-emerge 2200ms cubic-bezier(0.25, 0.1, 0.25, 1) both"
               : "none",
             // Card is invisible from stage 0-3 (sits in envelope pocket
-            // covered by front panel at zIndex 3). At stage 4 it becomes
-            // visible AND zIndex jumps so it can slide up over the panel.
+            // covered by front panel). At stage 4 it becomes visible AND
+            // zIndex jumps so it slides up over the front panel.
             opacity: stage >= 4 ? 1 : 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16,
-            overflow: "hidden",
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            padding: "24px 16px",
           }}
         >
-          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <div style={{
+            textAlign: "center",
+            display: "flex", flexDirection: "column", alignItems: "center",
+            gap: 10,
+            width: "100%",
+          }}>
             <div style={{
               fontSize: 8, color: "#8B5F18", letterSpacing: "0.3em",
-              fontWeight: 700, fontFamily: FONT.b, opacity: 0.7,
+              fontWeight: 700, fontFamily: FONT.b, opacity: 0.75,
             }}>
               YOUR EXCLUSIVE INVITATION
             </div>
-            <V2InsiderLogo width={200} dropShadow={false} />
+            <V2InsiderLogo width={180} dropShadow={false} />
             <div style={{
-              fontSize: 10, color: "#6B5230", marginTop: 4,
+              fontSize: 11, color: "#3A2810", marginTop: 6,
               fontFamily: FONT.h, fontStyle: "italic",
+              lineHeight: 1.4,
+              maxWidth: "85%",
             }}>
               Welcome to the inner circle.
             </div>
             <div style={{
               fontSize: 7, color: "#8B5F18", letterSpacing: "0.25em",
-              fontFamily: FONT.b, opacity: 0.55, marginTop: 6,
+              fontFamily: FONT.b, opacity: 0.6, marginTop: 8,
               borderTop: "0.5px solid rgba(218, 165, 32, 0.4)",
-              paddingTop: 6, width: 110,
+              paddingTop: 8, width: 120,
             }}>
               1-GROUP SINGAPORE
             </div>
