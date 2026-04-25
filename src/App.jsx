@@ -72,8 +72,8 @@ const FONT = { h: "'Playfair Display',Georgia,serif", b: "'DM Sans',system-ui,sa
 
 const TIER_INFO = {
   silver: { name: "Silver", fee: "Free", earn: "$1 = 1 pt", bday: "10%", nonStop: false, vCount: 1, vValue: 10, benefits: ["Base earn rate ($1 = 1 point)","10% birthday discount on total bill","1×$10 welcome voucher","Café stamp card","Gift card access"] },
-  gold: { name: "Paid Gold", fee: "$40/yr", earn: "$1 = 1.5 pts", bday: "15%", nonStop: true, vCount: 10, vValue: 20, benefits: ["Enhanced earn rate ($1 = 1.5 points)","15% birthday discount on total bill","10×$20 dining vouchers (Non-Stop Hits)","Priority reservations","Exclusive event access","Café stamp card"] },
-  platinum: { name: "Paid Platinum", fee: "$80/yr", earn: "$1 = 2 pts", bday: "20%", nonStop: true, vCount: 10, vValue: 25, benefits: ["Premium earn rate ($1 = 2 points)","20% birthday discount on total bill","10×$25 dining vouchers (Non-Stop Hits)","VIP reservations","Concierge service","Chef's table access","Café stamp card"] },
+  gold: { name: "Gold", fee: "$40/yr", earn: "$1 = 1.5 pts", bday: "15%", nonStop: true, vCount: 10, vValue: 20, benefits: ["Enhanced earn rate ($1 = 1.5 points)","15% birthday discount on total bill","10×$20 dining vouchers (Non-Stop Hits)","Priority reservations","Exclusive event access","Café stamp card"] },
+  platinum: { name: "Platinum", fee: "$80/yr", earn: "$1 = 2 pts", bday: "20%", nonStop: true, vCount: 10, vValue: 25, benefits: ["Premium earn rate ($1 = 2 points)","20% birthday discount on total bill","10×$25 dining vouchers (Non-Stop Hits)","VIP reservations","Concierge service","Chef's table access","Café stamp card"] },
   corporate: { name: "Corporate", fee: "Invite", earn: "$1 = 1.5 pts", bday: "15%", nonStop: true, vCount: 10, vValue: 20, benefits: ["Corporate earn rate ($1 = 1.5 points)","15% birthday discount","10×$20 dining vouchers (Non-Stop Hits)","Bulk gift cards","Event coordination","Dedicated account manager"] },
   staff: { name: "Staff", fee: "Internal", earn: "$1 = 1 pt", bday: "TBC", nonStop: false, vCount: 0, vValue: 0, benefits: ["Staff dining vouchers","Internal events","Staff-only promotions"] },
 };
@@ -1415,6 +1415,24 @@ function SignInV2({ onSuccess, onBack, revealing }) {
 }
 
 // ─── S3: Home — V2 helpers ────────────────────────────────────────────────
+// Platinum tier uses a polished-metal conic gradient sampled from
+// Chris's platiunum.png reference: cool blue rays around 213-247°,
+// warm cream highlights around 303-326°, with a soft white centre
+// glow. The richest of the three metallics — blends silver's
+// reflectivity with subtle warm/cool dichroism for true platinum feel.
+const V2_PLATINUM_METAL =
+  "radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.5) 0%, rgba(220, 230, 240, 0.0) 35%), " +
+  "conic-gradient(from -90deg at 50% 50%, " +
+    "#AEC0CE 0deg, #C8DADE 11deg, #D7EAEE 22deg, #C7E1EE 33deg, " +
+    "#AFC9D6 45deg, #9DB9C5 56deg, #98B8D1 67deg, #AEC8D9 78deg, " +
+    "#D7E3D7 90deg, #DEE2D3 101deg, #CAC7B4 112deg, #BCB598 123deg, " +
+    "#B3B0A1 135deg, #BEBFB7 146deg, #DCDAC5 157deg, #E9E8D4 168deg, " +
+    "#D4D9D3 180deg, #B3C0B9 191deg, #9EB2B9 202deg, #A1C0DF 213deg, " +
+    "#BBD9F3 225deg, #D7E9F3 236deg, #CDE0E6 247deg, #BCC6C5 258deg, " +
+    "#ADB3A9 270deg, #ADB6B5 281deg, #C2C7C3 292deg, #E7E0C6 303deg, " +
+    "#EEE3C7 315deg, #D6CEB7 326deg, #BDB7A1 337deg, #ADAFA2 348deg, " +
+    "#AEC0CE 360deg)";
+
 // Silver tier uses a polished-metal conic gradient sampled from Chris's
 // Pantone 20-0002 TPM "Ice Palace" reference (silver_panetone.png): two
 // bright ray clusters around 45-67° and 202-225°, with darker valleys
@@ -1450,7 +1468,7 @@ const V2_GOLD_METAL =
 const V2_TIER_GRADIENTS = {
   silver:    V2_SILVER_METAL,
   gold:      V2_GOLD_METAL,
-  platinum:  "linear-gradient(135deg, #F1EDFA 0%, #EDEBFA 50%, #9B97C9 100%)",
+  platinum:  V2_PLATINUM_METAL,
   corporate: "linear-gradient(135deg, #2A2D36 0%, #0F111A 100%)",
   staff:     "linear-gradient(135deg, #4A8DFF 0%, #1E5FC9 100%)",
 };
