@@ -296,27 +296,32 @@ function V2Styles() {
       "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
       "@keyframes v2-fab-ignite { 0% { box-shadow: 0 0 0 0 rgba(245,215,166,0.5); } 100% { box-shadow: 0 0 0 80px rgba(245,215,166,0); } }" +
       "@keyframes v2-foil-shimmer { 0% { background-position: 200% 0%, 0% 0%; } 100% { background-position: -100% 0%, 0% 0%; } }" +
-      // Diagonal scroll reveal — clip-path polygon moves a TL→BR diagonal
-      // cut from the bottom-left corner up to the top-right, scrolling the
-      // cinematic away to reveal the gold-foil underside + login beneath.
-      "@keyframes v2-scroll-reveal { " +
-        "0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); } " +
-        "100% { clip-path: polygon(0 0, 100% 0, 100% -10%, 110% -10%); } " +
+      // Theatre curtain rise — anchored at the top-right (rigging point)
+      // pulling the bottom-left up. The cinematic acts as the curtain face;
+      // it scales down and rotates slightly while translating toward the
+      // anchor, exposing the gold-foil curtain back as it rises. Combined
+      // with the SVG-mask curve in the render layer, this reads as a
+      // theatre curtain being drawn back diagonally rather than a flat
+      // panel scrolling.
+      "@keyframes v2-curtain-rise { " +
+        "0% { transform: translate(0, 0) rotate(0deg) scale(1); transform-origin: 100% 0%; } " +
+        "100% { transform: translate(35%, -55%) rotate(-12deg) scale(0.55); transform-origin: 100% 0%; } " +
       "}" +
-      // Gold-foil underside — fades in along the receding diagonal edge.
-      // The foil layer sits behind the cinematic; as the cinematic clips
-      // away from BL→TR, the foil becomes visible.
-      "@keyframes v2-foil-underside-reveal { " +
-        "0% { opacity: 0; transform: scale(1.05); } " +
-        "20% { opacity: 1; } " +
-        "100% { opacity: 1; transform: scale(1); } " +
-      "}" +
-      // Diagonal gold ridge — soft moving highlight along the cinematic's
-      // receding edge during the scroll, like the bright crest of a curl.
-      "@keyframes v2-scroll-edge-glow { " +
+      // Gold-foil curtain back — the rich foil revealed behind the rising
+      // curtain. Stays anchored to the viewport (doesn't move with the
+      // curtain) and fades in just before the curtain begins lifting so
+      // it's visible as the leading edge clears.
+      "@keyframes v2-curtain-back-reveal { " +
         "0% { opacity: 0; } " +
-        "10% { opacity: 1; } " +
-        "100% { opacity: 0; } " +
+        "15% { opacity: 1; } " +
+        "100% { opacity: 1; } " +
+      "}" +
+      // Curtain pleat folds — vertical stripes that compress horizontally
+      // as the curtain bunches up toward the rigging point. Increases the
+      // cloth-like quality of the rising fabric.
+      "@keyframes v2-curtain-pleats-bunch { " +
+        "0% { background-size: 8% 100%; } " +
+        "100% { background-size: 4% 100%; } " +
       "}" +
       "@keyframes v2-gold-shimmer { 0% { background-position: 200% 50%; } 50% { background-position: 0% 50%; } 100% { background-position: -200% 50%; } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
@@ -645,22 +650,46 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
 
   return (
     <>
-      {/* Gold-foil underside — sits behind the cinematic, exposed
-          progressively along the receding diagonal edge during peeling.
-          Same V2_GOLD_FOIL_BG + V2_GOLD_FOIL_SHEEN treatment as the FAB
-          and Login button so the gold is visually unified across surfaces. */}
+      {/* THEATRE CURTAIN BACKDROP (behind cinematic, exposed as curtain rises)
+          The gold-foil curtain reverse: rich amber foil with vertical pleat
+          stripes simulating fabric folds. Stays anchored full-screen so the
+          login can settle into place beneath it as the curtain face lifts. */}
       {peeling && (
-        <div
-          aria-hidden
-          style={{
-            position: "fixed", inset: 0,
-            background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
-            backgroundSize: "200% 100%, 100% 100%",
-            zIndex: 104,
-            animation: "v2-foil-underside-reveal 900ms ease-out both, v2-foil-shimmer 4s linear infinite",
-            pointerEvents: "none",
-          }}
-        />
+        <>
+          {/* Foil base layer */}
+          <div
+            aria-hidden
+            style={{
+              position: "fixed", inset: 0,
+              background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
+              backgroundSize: "200% 100%, 100% 100%",
+              zIndex: 103,
+              animation: "v2-curtain-back-reveal 1100ms ease-out both, v2-foil-shimmer 4s linear infinite",
+              pointerEvents: "none",
+            }}
+          />
+          {/* Vertical pleat overlay — alternating bright/dark stripes that
+              compress horizontally toward the rigging point as the curtain
+              bunches. Creates the cloth-pleat illusion. */}
+          <div
+            aria-hidden
+            style={{
+              position: "fixed", inset: 0,
+              background:
+                "repeating-linear-gradient(90deg, " +
+                  "rgba(0, 0, 0, 0.18) 0%, " +
+                  "rgba(0, 0, 0, 0.0) 25%, " +
+                  "rgba(255, 230, 150, 0.22) 50%, " +
+                  "rgba(0, 0, 0, 0.0) 75%, " +
+                  "rgba(0, 0, 0, 0.18) 100%)",
+              backgroundSize: "8% 100%",
+              zIndex: 104,
+              animation: "v2-curtain-back-reveal 1100ms ease-out both, v2-curtain-pleats-bunch 1100ms ease-out both",
+              pointerEvents: "none",
+              mixBlendMode: "overlay",
+            }}
+          />
+        </>
       )}
     <div
       style={{
@@ -673,8 +702,19 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         filter: dimmed && !peeling ? "brightness(0.65) saturate(0.85)" : "none",
         transition: dimmed && !peeling ? "filter 520ms cubic-bezier(0.2, 0.8, 0.2, 1)" : "none",
         pointerEvents: dimmed ? "none" : "auto",
-        animation: peeling ? "v2-scroll-reveal 950ms cubic-bezier(0.55, 0.08, 0.45, 0.95) forwards" : "none",
-        boxShadow: peeling ? "0 -2px 0 rgba(245, 215, 166, 0.6), 0 24px 80px rgba(0, 0, 0, 0.7)" : "none",
+        animation: peeling ? "v2-curtain-rise 1100ms cubic-bezier(0.45, 0.05, 0.35, 0.98) forwards" : "none",
+        // SVG mask for curved bottom drape — only applied during peeling.
+        // The mask is a downward-bulging arc that gives the rising curtain
+        // a soft fabric-edge curve rather than a hard rectangular bottom.
+        maskImage: peeling
+          ? "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M 0 0 L 100 0 L 100 88 Q 75 96 50 92 Q 25 88 0 95 Z' fill='black'/></svg>\")"
+          : "none",
+        WebkitMaskImage: peeling
+          ? "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M 0 0 L 100 0 L 100 88 Q 75 96 50 92 Q 25 88 0 95 Z' fill='black'/></svg>\")"
+          : "none",
+        maskSize: "100% 100%",
+        WebkitMaskSize: "100% 100%",
+        boxShadow: peeling ? "0 24px 80px rgba(0, 0, 0, 0.7)" : "none",
       }}
     >
       <V2Styles />
@@ -682,6 +722,28 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         "@keyframes v2-kenburns { 0% { transform: scale(1.05); } 100% { transform: scale(1.15); } }"
       }</style>
       {!dimmed && !peeling && <V2Badge />}
+
+      {/* Vertical pleat shadows on the cinematic curtain face — subtle
+          dark stripes that suggest fabric folds on the curtain front
+          while it's being lifted. Only visible during peeling. */}
+      {peeling && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute", inset: 0,
+            background:
+              "repeating-linear-gradient(90deg, " +
+                "rgba(0, 0, 0, 0.0) 0%, " +
+                "rgba(0, 0, 0, 0.25) 50%, " +
+                "rgba(0, 0, 0, 0.0) 100%)",
+            backgroundSize: "10% 100%",
+            zIndex: 5,
+            pointerEvents: "none",
+            mixBlendMode: "multiply",
+            animation: "v2-curtain-back-reveal 1100ms ease-out both",
+          }}
+        />
+      )}
 
       {/* Hero compilation — crossfades between VENUE_DIRECTORY marquee thumbnails
           every 4.5s with a slow Ken Burns zoom. Replace with a single <video> once
@@ -4268,7 +4330,7 @@ export default function App() {
     if (peeling) return;
     setPeeling(true);
     setView(VIEW.SIGNIN); // mount SignInV2 underneath immediately
-    setTimeout(() => setPeeling(false), 950);
+    setTimeout(() => setPeeling(false), 1150);
   }, [peeling]);
   const [rewards, setRewards] = useState([]);
   const [transactions, setTxns] = useState([]);
