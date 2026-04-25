@@ -2438,7 +2438,7 @@ function V2BottomNav({ view, setView, classic, hasUnscannedVoucher, onScan }) {
     { key: "home",    label: "Home",    icon: "⌂", v: VIEW.HOME },
     { key: "rewards", label: "Rewards", icon: "✦", v: VIEW.REWARDS },
     { key: "scan",    label: "Scan",    isFab: true, v: VIEW.WALLET },
-    { key: "points",  label: "Points",  icon: "◆", v: VIEW.HISTORY },
+    { key: "receipts", label: "Receipts", icon: "▭", v: VIEW.HISTORY },
     { key: "city",    label: "City",    icon: "◉", v: VIEW.EXPLORE },
   ];
 
@@ -3646,10 +3646,10 @@ function ReceiptsHistoryV2({ member, receipts, setView }) {
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: V2.textMuted, marginBottom: 6 }}>
-          ✦ Points & Receipts
+          ✦ Receipts
         </div>
         <div style={{ fontFamily: FONT.h, fontSize: 28, fontWeight: 600, letterSpacing: "-0.01em", color: V2.text, marginBottom: 6, lineHeight: 1.1 }}>
-          Your history
+          Your receipts
         </div>
         <div style={{ fontSize: 13, color: V2.textSecondary, lineHeight: 1.5 }}>
           Every bill you've paid with the app — with itemised breakdown and the points earned on each.
