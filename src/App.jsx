@@ -1415,9 +1415,24 @@ function SignInV2({ onSuccess, onBack, revealing }) {
 }
 
 // ─── S3: Home — V2 helpers ────────────────────────────────────────────────
+// Gold tier uses a polished-metal conic gradient sampled from Chris's
+// reference image (gold2.png): four bright rays at ~11°/168°/236°/303°
+// with darker valleys at ~123°/270°, plus a soft radial highlight near
+// the centre to read as a metallic sheen.
+const V2_GOLD_METAL =
+  "radial-gradient(circle at 50% 45%, rgba(255, 250, 220, 0.55) 0%, rgba(255, 240, 190, 0.0) 38%), " +
+  "conic-gradient(from -90deg at 50% 50%, " +
+    "#E8CF7B 0deg, #FCE691 11deg, #F6DE84 22deg, #E5C362 33deg, " +
+    "#D2A940 45deg, #CDA63D 56deg, #D7AD57 78deg, #D8B25D 90deg, " +
+    "#CAA54D 101deg, #B88F37 112deg, #A57C22 123deg, #C39C37 146deg, " +
+    "#E7BE55 168deg, #D9AF4B 180deg, #BD9631 202deg, #D8B64B 225deg, " +
+    "#F7DB6D 236deg, #D0B059 247deg, #AE892E 258deg, #A47C1D 270deg, " +
+    "#B4892A 281deg, #D2A741 292deg, #E6BD54 303deg, #DDB556 315deg, " +
+    "#CEA951 326deg, #C79E4E 337deg, #CFAD65 348deg, #E8CF7B 360deg)";
+
 const V2_TIER_GRADIENTS = {
   silver:    "linear-gradient(135deg, #F2F3F5 0%, #F6EDEB 100%)",
-  gold:      "linear-gradient(135deg, #FBE8C9 0%, #F5D7A6 50%, #C79A5A 100%)",
+  gold:      V2_GOLD_METAL,
   platinum:  "linear-gradient(135deg, #F1EDFA 0%, #EDEBFA 50%, #9B97C9 100%)",
   corporate: "linear-gradient(135deg, #2A2D36 0%, #0F111A 100%)",
   staff:     "linear-gradient(135deg, #4A8DFF 0%, #1E5FC9 100%)",
