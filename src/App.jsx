@@ -296,32 +296,40 @@ function V2Styles() {
       "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
       "@keyframes v2-fab-ignite { 0% { box-shadow: 0 0 0 0 rgba(245,215,166,0.5); } 100% { box-shadow: 0 0 0 80px rgba(245,215,166,0); } }" +
       "@keyframes v2-foil-shimmer { 0% { background-position: 200% 0%, 0% 0%; } 100% { background-position: -100% 0%, 0% 0%; } }" +
-      // Theatre curtain rise — anchored at the top-right (rigging point)
-      // pulling the bottom-left up. The cinematic acts as the curtain face;
-      // it scales down and rotates slightly while translating toward the
-      // anchor, exposing the gold-foil curtain back as it rises. Combined
-      // with the SVG-mask curve in the render layer, this reads as a
-      // theatre curtain being drawn back diagonally rather than a flat
-      // panel scrolling.
-      "@keyframes v2-curtain-rise { " +
-        "0% { transform: translate(0, 0) rotate(0deg) scale(1); transform-origin: 100% 0%; } " +
-        "100% { transform: translate(35%, -55%) rotate(-12deg) scale(0.55); transform-origin: 100% 0%; } " +
+      // ENVELOPE REVEAL CHOREOGRAPHY
+      // Envelope arrives: scales up from 0.6 + fades in.
+      "@keyframes v2-envelope-arrive { " +
+        "0% { opacity: 0; transform: translateY(40px) scale(0.6); } " +
+        "100% { opacity: 1; transform: translateY(0) scale(1); } " +
       "}" +
-      // Gold-foil curtain back — the rich foil revealed behind the rising
-      // curtain. Stays anchored to the viewport (doesn't move with the
-      // curtain) and fades in just before the curtain begins lifting so
-      // it's visible as the leading edge clears.
-      "@keyframes v2-curtain-back-reveal { " +
-        "0% { opacity: 0; } " +
-        "15% { opacity: 1; } " +
-        "100% { opacity: 1; } " +
+      // Wax seal lights up just after envelope settles.
+      "@keyframes v2-seal-shine { " +
+        "0% { opacity: 0; transform: scale(0.6) rotate(-25deg); } " +
+        "60% { opacity: 1; transform: scale(1.15) rotate(0deg); } " +
+        "100% { opacity: 1; transform: scale(1) rotate(0deg); } " +
       "}" +
-      // Curtain pleat folds — vertical stripes that compress horizontally
-      // as the curtain bunches up toward the rigging point. Increases the
-      // cloth-like quality of the rising fabric.
-      "@keyframes v2-curtain-pleats-bunch { " +
-        "0% { background-size: 8% 100%; } " +
-        "100% { background-size: 4% 100%; } " +
+      // Envelope flap rotates open from its top hinge.
+      "@keyframes v2-flap-open { " +
+        "0% { transform: rotateX(0deg); } " +
+        "100% { transform: rotateX(-180deg); } " +
+      "}" +
+      // Invitation card slides up out of envelope, revealing fully.
+      "@keyframes v2-card-emerge { " +
+        "0% { transform: translateY(0) scale(1); opacity: 1; } " +
+        "60% { transform: translateY(-30%) scale(1.02); opacity: 1; } " +
+        "100% { transform: translateY(-50%) scale(1.5); opacity: 1; } " +
+      "}" +
+      // Envelope itself fades out as the card emerges and expands to full screen.
+      "@keyframes v2-envelope-dissolve { " +
+        "0% { opacity: 1; } " +
+        "70% { opacity: 1; } " +
+        "100% { opacity: 0; } " +
+      "}" +
+      // Final expansion: invitation grows beyond viewport edges, becoming
+      // the login backdrop, fading out so the actual login renders cleanly.
+      "@keyframes v2-card-expand { " +
+        "0% { transform: scale(1); opacity: 1; } " +
+        "100% { transform: scale(8); opacity: 0; } " +
       "}" +
       "@keyframes v2-gold-shimmer { 0% { background-position: 200% 50%; } 50% { background-position: 0% 50%; } 100% { background-position: -200% 50%; } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
@@ -415,6 +423,193 @@ function V2InsiderLogo({ width, style, dropShadow }) {
         ...style,
       }}
     />
+  );
+}
+
+// V2EnvelopeReveal — premium invitation envelope opening animation.
+// Choreography (~2.9s total):
+//   0–600ms    Envelope arrives (scale up + fade in), wax seal shines
+//   600–1700ms Hold: invitation text glows on the envelope face
+//   1700–2400ms Seal breaks, flap rotates open (rotateX from hinge)
+//   2400–2900ms Invitation card emerges + expands to fill viewport
+// Calls onComplete after total duration, which the App orchestrator uses
+// to unmount this component and reveal the SignInV2 panel beneath.
+function V2EnvelopeReveal({ onComplete }) {
+  const [stage, setStage] = useState(0);
+  // Stage progression: 0 = arrive, 1 = hold, 2 = open, 3 = emerge, 4 = done
+  useEffect(() => {
+    const t1 = setTimeout(() => setStage(1), 700);   // arrive complete, seal shines
+    const t2 = setTimeout(() => setStage(2), 1300);  // begin opening (was 1700 — shorter hold beat per design review)
+    const t3 = setTimeout(() => setStage(3), 1900);  // card emerges (was 2400)
+    const t4 = setTimeout(() => onComplete && onComplete(), 2400); // signal done (was 2900)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+  }, [onComplete]);
+
+  // Envelope dimensions — slightly portrait, matches a real DL/A6 envelope.
+  const envW = 320; // px
+  const envH = 200;
+  const flapH = envH * 0.55; // top flap covers slightly over half
+
+  // Foil background used for envelope body, flap, and seal — same V2_GOLD_FOIL
+  // palette as logo/FAB/button so the gold reads unified across surfaces.
+  const foilBg = V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG;
+
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "fixed", inset: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 200,
+        pointerEvents: "none",
+        background: "radial-gradient(ellipse at center, rgba(80, 60, 20, 0.35) 0%, rgba(15, 17, 26, 0.85) 60%, rgba(15, 17, 26, 0.95) 100%)",
+        animation: "v2-fade-in 400ms ease-out both",
+        perspective: 1400,
+      }}
+    >
+      {/* Envelope assembly */}
+      <div
+        style={{
+          position: "relative",
+          width: envW, height: envH,
+          maxWidth: "85vw",
+          animation: stage >= 3
+            ? "v2-card-expand 700ms cubic-bezier(0.55, 0.05, 0.85, 0.95) forwards, v2-envelope-dissolve 700ms ease-in forwards"
+            : stage === 0
+              ? "v2-envelope-arrive 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
+              : "none",
+          opacity: stage >= 3 ? undefined : 1,
+        }}
+      >
+        {/* INVITATION CARD — sits inside the envelope; emerges in stage 2/3 */}
+        <div
+          style={{
+            position: "absolute",
+            left: "8%", right: "8%",
+            top: "12%", bottom: "12%",
+            background: "linear-gradient(135deg, #FFFCF5 0%, #FFF6E1 50%, #FFE9C2 100%)",
+            borderRadius: 4,
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(218, 165, 32, 0.4) inset",
+            zIndex: 2,
+            transformOrigin: "center center",
+            animation: stage >= 2
+              ? "v2-card-emerge 700ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both"
+              : "none",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+            overflow: "hidden",
+          }}
+        >
+          {/* Card content: actual 1-INSIDER wordmark in foil + letterhead */}
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={{
+              fontSize: 7, color: "#8B5F18", letterSpacing: "0.25em",
+              fontWeight: 700, fontFamily: FONT.b, opacity: 0.7,
+            }}>
+              YOUR EXCLUSIVE INVITATION
+            </div>
+            <V2InsiderLogo width={180} dropShadow={false} />
+            <div style={{
+              fontSize: 8, color: "#6B5230", marginTop: 2,
+              fontFamily: FONT.h, fontStyle: "italic",
+            }}>
+              Welcome to the inner circle.
+            </div>
+            <div style={{
+              fontSize: 6, color: "#8B5F18", letterSpacing: "0.2em",
+              fontFamily: FONT.b, opacity: 0.55, marginTop: 4,
+              borderTop: "0.5px solid rgba(218, 165, 32, 0.4)",
+              paddingTop: 4, width: 100,
+            }}>
+              1-GROUP SINGAPORE
+            </div>
+          </div>
+        </div>
+
+        {/* ENVELOPE BODY (back panel) — visible behind the card */}
+        <div
+          style={{
+            position: "absolute", inset: 0,
+            background: foilBg,
+            backgroundSize: "200% 100%, 100% 100%",
+            borderRadius: 6,
+            boxShadow: "0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 230, 150, 0.5) inset",
+            animation: "v2-foil-shimmer 4s linear infinite",
+            zIndex: 1,
+          }}
+        />
+
+        {/* ENVELOPE BOTTOM FOLD — the V-shaped flap visible on a real envelope back */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            bottom: 0, left: 0, right: 0,
+            height: "60%",
+            background: "linear-gradient(135deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.18) 100%)",
+            clipPath: "polygon(0 100%, 50% 0, 100% 100%)",
+            zIndex: 3,
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* ENVELOPE TOP FLAP — rotates open in stage 2 */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0, left: 0, right: 0,
+            height: flapH,
+            background: foilBg,
+            backgroundSize: "200% 100%, 100% 100%",
+            clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+            transformOrigin: "top center",
+            animation: stage >= 2
+              ? "v2-flap-open 700ms cubic-bezier(0.45, 0.05, 0.4, 1) forwards, v2-foil-shimmer 4s linear infinite"
+              : "v2-foil-shimmer 4s linear infinite",
+            zIndex: 5,
+            // Slight gold edge highlight along the V-fold seam
+            filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))",
+          }}
+        />
+
+        {/* WAX SEAL — gold medallion bearing the actual 1-INSIDER wordmark */}
+        <div
+          style={{
+            position: "absolute",
+            left: "50%", top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 88, height: 88,
+            borderRadius: "50%",
+            background: "radial-gradient(circle at 35% 30%, #F6E5A0 0%, #D4A42D 35%, #B88320 70%, #8B5F18 100%)",
+            boxShadow: "0 0 0 1px rgba(255, 230, 150, 0.6) inset, 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 24px rgba(218, 165, 32, 0.5)",
+            zIndex: 6,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            opacity: stage >= 2 ? 0 : 1,
+            transition: stage >= 2 ? "opacity 200ms ease-out" : "none",
+            animation: stage === 0 ? "v2-seal-shine 800ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both" : "none",
+            // Inner seal ring — a faint dashed circle around the perimeter
+            // for the embossed-wax look.
+            backgroundClip: "padding-box",
+          }}
+        >
+          {/* Embossed perimeter ring */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", inset: 6,
+              borderRadius: "50%",
+              border: "0.5px dashed rgba(58, 40, 16, 0.35)",
+              pointerEvents: "none",
+            }}
+          />
+          {/* Actual 1-INSIDER wordmark, foil-stamped onto the seal.
+              Renders the same V2InsiderLogo component used on Login —
+              real logo silhouette via /insider-logo-mask.png + foil
+              gradient + v2-foil-shimmer animation. */}
+          <V2InsiderLogo width={62} dropShadow={false} style={{ filter: "drop-shadow(0 1px 0 rgba(255, 240, 200, 0.45))" }} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -649,48 +844,6 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
   }, [heroImages.length]);
 
   return (
-    <>
-      {/* THEATRE CURTAIN BACKDROP (behind cinematic, exposed as curtain rises)
-          The gold-foil curtain reverse: rich amber foil with vertical pleat
-          stripes simulating fabric folds. Stays anchored full-screen so the
-          login can settle into place beneath it as the curtain face lifts. */}
-      {peeling && (
-        <>
-          {/* Foil base layer */}
-          <div
-            aria-hidden
-            style={{
-              position: "fixed", inset: 0,
-              background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
-              backgroundSize: "200% 100%, 100% 100%",
-              zIndex: 103,
-              animation: "v2-curtain-back-reveal 1100ms ease-out both, v2-foil-shimmer 4s linear infinite",
-              pointerEvents: "none",
-            }}
-          />
-          {/* Vertical pleat overlay — alternating bright/dark stripes that
-              compress horizontally toward the rigging point as the curtain
-              bunches. Creates the cloth-pleat illusion. */}
-          <div
-            aria-hidden
-            style={{
-              position: "fixed", inset: 0,
-              background:
-                "repeating-linear-gradient(90deg, " +
-                  "rgba(0, 0, 0, 0.18) 0%, " +
-                  "rgba(0, 0, 0, 0.0) 25%, " +
-                  "rgba(255, 230, 150, 0.22) 50%, " +
-                  "rgba(0, 0, 0, 0.0) 75%, " +
-                  "rgba(0, 0, 0, 0.18) 100%)",
-              backgroundSize: "8% 100%",
-              zIndex: 104,
-              animation: "v2-curtain-back-reveal 1100ms ease-out both, v2-curtain-pleats-bunch 1100ms ease-out both",
-              pointerEvents: "none",
-              mixBlendMode: "overlay",
-            }}
-          />
-        </>
-      )}
     <div
       style={{
         position: "fixed", inset: 0,
@@ -698,52 +851,17 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         color: V2.text,
         fontFamily: FONT.b,
         overflow: "hidden",
-        zIndex: peeling ? 105 : (dimmed ? 50 : 100),
-        filter: dimmed && !peeling ? "brightness(0.65) saturate(0.85)" : "none",
-        transition: dimmed && !peeling ? "filter 520ms cubic-bezier(0.2, 0.8, 0.2, 1)" : "none",
-        pointerEvents: dimmed ? "none" : "auto",
-        animation: peeling ? "v2-curtain-rise 1100ms cubic-bezier(0.45, 0.05, 0.35, 0.98) forwards" : "none",
-        // SVG mask for curved bottom drape — only applied during peeling.
-        // The mask is a downward-bulging arc that gives the rising curtain
-        // a soft fabric-edge curve rather than a hard rectangular bottom.
-        maskImage: peeling
-          ? "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M 0 0 L 100 0 L 100 88 Q 75 96 50 92 Q 25 88 0 95 Z' fill='black'/></svg>\")"
-          : "none",
-        WebkitMaskImage: peeling
-          ? "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M 0 0 L 100 0 L 100 88 Q 75 96 50 92 Q 25 88 0 95 Z' fill='black'/></svg>\")"
-          : "none",
-        maskSize: "100% 100%",
-        WebkitMaskSize: "100% 100%",
-        boxShadow: peeling ? "0 24px 80px rgba(0, 0, 0, 0.7)" : "none",
+        zIndex: dimmed || peeling ? 50 : 100,
+        filter: (dimmed || peeling) ? "brightness(0.45) saturate(0.85)" : "none",
+        transition: "filter 480ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        pointerEvents: (dimmed || peeling) ? "none" : "auto",
       }}
     >
       <V2Styles />
       <style>{
         "@keyframes v2-kenburns { 0% { transform: scale(1.05); } 100% { transform: scale(1.15); } }"
       }</style>
-      {!dimmed && !peeling && <V2Badge />}
-
-      {/* Vertical pleat shadows on the cinematic curtain face — subtle
-          dark stripes that suggest fabric folds on the curtain front
-          while it's being lifted. Only visible during peeling. */}
-      {peeling && (
-        <div
-          aria-hidden
-          style={{
-            position: "absolute", inset: 0,
-            background:
-              "repeating-linear-gradient(90deg, " +
-                "rgba(0, 0, 0, 0.0) 0%, " +
-                "rgba(0, 0, 0, 0.25) 50%, " +
-                "rgba(0, 0, 0, 0.0) 100%)",
-            backgroundSize: "10% 100%",
-            zIndex: 5,
-            pointerEvents: "none",
-            mixBlendMode: "multiply",
-            animation: "v2-curtain-back-reveal 1100ms ease-out both",
-          }}
-        />
-      )}
+      {!(dimmed || peeling) && <V2Badge />}
 
       {/* Hero compilation — crossfades between VENUE_DIRECTORY marquee thumbnails
           every 4.5s with a slow Ken Burns zoom. Replace with a single <video> once
@@ -878,7 +996,6 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         </div>
       </div>
     </div>
-    </>
   );
 }
 
@@ -4321,17 +4438,20 @@ export default function App() {
   const [view, setView] = useState(VIEW.LANDING);
   const [member, setMember] = useState(null);
   const [showPay, setShowPay] = useState(false);
-  const [peeling, setPeeling] = useState(false); // Landing → SignIn page-curl
+  const [peeling, setPeeling] = useState(false); // Landing → SignIn envelope reveal
 
-  // Page-curl orchestrator: cinematic flips down (rotateX), revealing
-  // the login panel that's already mounted underneath. After 900ms the
-  // landing unmounts and the SignInV2 panel becomes the sole layer.
+  // Envelope-reveal orchestrator: cinematic dims, premium invitation envelope
+  // appears and opens, then settles into the SignInV2 panel beneath. The
+  // V2EnvelopeReveal component manages its own ~2.9s choreography (arrive →
+  // hold → open → emerge) and signals onComplete; we then unmount it.
   const goToSignIn = useCallback(() => {
     if (peeling) return;
     setPeeling(true);
     setView(VIEW.SIGNIN); // mount SignInV2 underneath immediately
-    setTimeout(() => setPeeling(false), 1150);
   }, [peeling]);
+  const handleEnvelopeComplete = useCallback(() => {
+    setPeeling(false);
+  }, []);
   const [rewards, setRewards] = useState([]);
   const [transactions, setTxns] = useState([]);
   const [vouchers, setVouchers] = useState([]);
@@ -4427,14 +4547,17 @@ export default function App() {
         </div>
       )}
 
-      {/* V2 LANDING + SIGNIN page-curl orchestration:
-          - Landing mounts whenever view is LANDING, OR while peeling (so it
-            visibly curls away).
-          - SignInV2 mounts as soon as view flips to SIGNIN — it sits at z=101
-            underneath the curling landing (z=105 during peel). After 900ms
-            the landing unmounts and SignInV2 is the sole layer. */}
+      {/* V2 LANDING → SIGNIN ENVELOPE-REVEAL ORCHESTRATION:
+          - Landing renders normally when view is LANDING; dims (filter
+            brightness 0.45) when peeling so the envelope on top reads.
+          - SignInV2 mounts as soon as goToSignIn fires — it sits beneath
+            the envelope layer (z=101 vs envelope z=200), ready to be
+            revealed once the envelope dissolves into the card-expand.
+          - V2EnvelopeReveal handles its own ~2.9s choreography and signals
+            handleEnvelopeComplete which flips peeling=false. After that,
+            LandingV2 unmounts and SignInV2 is the sole layer. */}
       {view === VIEW.LANDING && classic && <Landing onSignIn={() => setView(VIEW.SIGNIN)} />}
-      {(view === VIEW.LANDING || peeling) && !classic && (
+      {view === VIEW.LANDING && !classic && (
         <LandingV2 onSignIn={goToSignIn} peeling={peeling} />
       )}
       {view === VIEW.SIGNIN && classic && (
@@ -4446,6 +4569,16 @@ export default function App() {
           onBack={() => setView(VIEW.LANDING)}
           revealing={peeling}
         />
+      )}
+      {/* Premium envelope reveal layer — covers viewport during the transition,
+          dismisses itself via onComplete callback. Renders Landing dimmed
+          beneath while envelope is active. */}
+      {peeling && !classic && (
+        <>
+          {/* Keep Landing visible (dimmed via its own filter while peeling) */}
+          <LandingV2 onSignIn={() => {}} peeling={true} />
+          <V2EnvelopeReveal onComplete={handleEnvelopeComplete} />
+        </>
       )}
       {view === VIEW.HOME && member && (classic
         ? <Home member={member} transactions={transactions} vouchers={vouchers} giftCards={giftCards} setView={setView} reload={() => loadMemberData(member.id)} />
