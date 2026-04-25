@@ -4797,6 +4797,57 @@ export default function App() {
           onClose={() => setShowPay(false)}
         />
       )}
+
+      {/* V2 floating Sign-out chip — top-right corner of all signed-in V2
+          views (Home, Explore, Receipts, Events, Profile). The classic
+          header is suppressed on V2 full-screen views by the conditional
+          above, so V2 has no built-in chrome for sign-out — this chip
+          fills the gap. Hidden on Landing/SignIn (no member yet) and in
+          classic mode (which uses the inline header sign-out). Hidden
+          during the envelope reveal (peeling=true) so it doesn't interrupt
+          the cinematic. */}
+      {!classic && member && view !== VIEW.LANDING && view !== VIEW.SIGNIN && !peeling && (
+        <button
+          onClick={signOut}
+          aria-label="Sign out"
+          title="Sign out"
+          style={{
+            position: "fixed",
+            top: 16,
+            right: 16,
+            zIndex: 150,
+            background: "rgba(15, 17, 26, 0.65)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            color: "#FFFFFF",
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            padding: "8px 14px",
+            borderRadius: 999,
+            cursor: "pointer",
+            fontFamily: FONT.b,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+            transition: "border-color .15s, background .15s",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "rgba(218, 165, 32, 0.55)";
+            e.currentTarget.style.background = "rgba(15, 17, 26, 0.85)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+            e.currentTarget.style.background = "rgba(15, 17, 26, 0.65)";
+          }}
+        >
+          <span style={{ fontSize: 11, opacity: 0.9 }}>↗</span>
+          Sign out
+        </button>
+      )}
     </div>
   );
 }
