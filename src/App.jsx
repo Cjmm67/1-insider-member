@@ -406,6 +406,21 @@ const V2_GOLD_FOIL_BG =
     "#C99725 80%, " +    // deep gold
     "#8B5F18 100%" +     // shadow corner
   ")";
+// Lighter variant — for surfaces that sit on dark backgrounds and need a
+// luminous, reflective gold-foil tone rather than the deep saturated one.
+// Used on the SignInV2 page logo. Stops are biased toward the bright
+// highlight band so the wordmark reads as polished light foil rather than
+// burnished antique gold.
+const V2_GOLD_FOIL_BG_LIGHT =
+  "linear-gradient(135deg, " +
+    "#D4A42D 0%, " +     // warm mid-gold edge (was deep amber)
+    "#E8C97A 18%, " +    // pale honey
+    "#FAF0C2 38%, " +    // very light highlight zone
+    "#FFF5D6 50%, " +    // brightest crest — near-white champagne
+    "#FAF0C2 62%, " +    // pale honey returning
+    "#E8C97A 82%, " +    // pale gold
+    "#D4A42D 100%" +     // warm mid-gold (no dark shadow corner)
+  ")";
 // Glossy overlay shimmer — subtle moving highlight that catches the eye
 // when applied as a second background layer.
 const V2_GOLD_FOIL_SHEEN =
@@ -413,23 +428,38 @@ const V2_GOLD_FOIL_SHEEN =
     "transparent 0%, transparent 40%, " +
     "rgba(255, 245, 200, 0.45) 50%, " +
     "transparent 60%, transparent 100%)";
+// Brighter sheen for the lighter foil — pushed higher opacity so it
+// catches more light against the lighter base.
+const V2_GOLD_FOIL_SHEEN_LIGHT =
+  "linear-gradient(105deg, " +
+    "transparent 0%, transparent 38%, " +
+    "rgba(255, 252, 230, 0.7) 50%, " +
+    "transparent 62%, transparent 100%)";
 const V2_GOLD_FOIL_TEXT = "#3A2810"; // rich espresso brown for legible foreground on foil
 
 // V2InsiderLogo — renders the 1-INSIDER wordmark with the same animated
 // gold-foil gradient + shimmer as the FAB and primary buttons. Uses CSS
 // mask-image to clip the gradient div through the logo's silhouette.
 // Aspect ratio of the source PNG is 539:93 ≈ 5.8:1.
-function V2InsiderLogo({ width, style, dropShadow }) {
+//
+// Pass `lighter` to use V2_GOLD_FOIL_BG_LIGHT — a brighter polished-foil
+// tone for surfaces against dark backgrounds (e.g. sign-up page).
+function V2InsiderLogo({ width, style, dropShadow, lighter }) {
   const w = width || 280;
   const h = Math.round(w * (93 / 539));
   const maskUrl = "url(/insider-logo-mask.png)";
+  const bg = lighter ? V2_GOLD_FOIL_BG_LIGHT : V2_GOLD_FOIL_BG;
+  const sheen = lighter ? V2_GOLD_FOIL_SHEEN_LIGHT : V2_GOLD_FOIL_SHEEN;
+  const shadowFilter = lighter
+    ? "drop-shadow(0 4px 24px rgba(255, 220, 140, 0.45))"
+    : "drop-shadow(0 4px 24px rgba(218, 165, 32, 0.35))";
   return (
     <div
       role="img"
       aria-label="1-INSIDER"
       style={{
         width: w, height: h,
-        background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
+        background: sheen + ", " + bg,
         backgroundSize: "200% 100%, 100% 100%",
         backgroundPosition: "0% 0%, 0% 0%",
         WebkitMaskImage: maskUrl,
@@ -439,7 +469,7 @@ function V2InsiderLogo({ width, style, dropShadow }) {
         WebkitMaskRepeat: "no-repeat",
         maskRepeat: "no-repeat",
         animation: "v2-foil-shimmer 4s linear infinite",
-        filter: dropShadow !== false ? "drop-shadow(0 4px 24px rgba(218, 165, 32, 0.35))" : "none",
+        filter: dropShadow !== false ? shadowFilter : "none",
         ...style,
       }}
     />
@@ -1472,9 +1502,10 @@ function SignInV2({ onSuccess, onBack, revealing }) {
                   overflow: "hidden",
                 }}
               />
-              {/* Gold-foil 1-INSIDER logo at top of login panel — animated foil shimmer */}
+              {/* Gold-foil 1-INSIDER logo at top of login panel — lighter
+                  polished-foil tone for luminous presence on dark glass */}
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
-                <V2InsiderLogo width={180} style={{ maxWidth: "60%" }} />
+                <V2InsiderLogo width={180} style={{ maxWidth: "60%" }} lighter />
               </div>
               <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 10, lineHeight: 1.25, color: "#FFFFFF", textAlign: "center" }}>
                 Join now to unlock the full potential of 1-Insider
