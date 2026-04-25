@@ -361,6 +361,37 @@ const V2_GOLD_FOIL_SHEEN =
     "transparent 60%, transparent 100%)";
 const V2_GOLD_FOIL_TEXT = "#3A2810"; // rich espresso brown for legible foreground on foil
 
+// V2InsiderLogo — renders the 1-INSIDER wordmark with the same animated
+// gold-foil gradient + shimmer as the FAB and primary buttons. Uses CSS
+// mask-image to clip the gradient div through the logo's silhouette.
+// Aspect ratio of the source PNG is 539:93 ≈ 5.8:1.
+function V2InsiderLogo({ width, style, dropShadow }) {
+  const w = width || 280;
+  const h = Math.round(w * (93 / 539));
+  const maskUrl = "url(/insider-logo-mask.png)";
+  return (
+    <div
+      role="img"
+      aria-label="1-INSIDER"
+      style={{
+        width: w, height: h,
+        background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
+        backgroundSize: "200% 100%, 100% 100%",
+        backgroundPosition: "0% 0%, 0% 0%",
+        WebkitMaskImage: maskUrl,
+        maskImage: maskUrl,
+        WebkitMaskSize: "100% 100%",
+        maskSize: "100% 100%",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        animation: "v2-foil-shimmer 4s linear infinite",
+        filter: dropShadow !== false ? "drop-shadow(0 4px 24px rgba(218, 165, 32, 0.35))" : "none",
+        ...style,
+      }}
+    />
+  );
+}
+
 function V2GoldFAB({ onClick, children, ariaLabel, style, idlePulse }) {
   const [pressed, setPressed] = useState(false);
   return (
@@ -681,16 +712,9 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         >
           ✦ 1-Group Singapore
         </div>
-        <img
-          src="/insider-logo-foil.png"
-          alt="1-INSIDER"
-          style={{
-            width: 280, maxWidth: "78vw", height: "auto",
-            marginBottom: 28,
-            filter: "drop-shadow(0 4px 24px rgba(245, 215, 166, 0.25))",
-            animation: "v2-fade-in 900ms ease-out 300ms both",
-          }}
-        />
+        <div style={{ marginBottom: 28, animation: "v2-fade-in 900ms ease-out 300ms both" }}>
+          <V2InsiderLogo width={280} style={{ maxWidth: "78vw" }} />
+        </div>
         <div
           style={{
             fontFamily: FONT.b,
@@ -1101,16 +1125,9 @@ function SignInV2({ onSuccess, onBack, revealing }) {
                   overflow: "hidden",
                 }}
               />
-              {/* Gold 1-INSIDER logo at top of login panel */}
+              {/* Gold-foil 1-INSIDER logo at top of login panel — animated foil shimmer */}
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
-                <img
-                  src="/insider-logo-foil.png"
-                  alt="1-INSIDER"
-                  style={{
-                    width: 180, maxWidth: "60%", height: "auto",
-                    filter: "drop-shadow(0 2px 12px rgba(245, 215, 166, 0.3))",
-                  }}
-                />
+                <V2InsiderLogo width={180} style={{ maxWidth: "60%" }} />
               </div>
               <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 10, lineHeight: 1.25, color: "#FFFFFF", textAlign: "center" }}>
                 Join now to unlock the full potential of 1-Insider
