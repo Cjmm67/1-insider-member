@@ -436,23 +436,40 @@ function V2InsiderLogo({ width, style, dropShadow }) {
 // to unmount this component and reveal the SignInV2 panel beneath.
 function V2EnvelopeReveal({ onComplete }) {
   const [stage, setStage] = useState(0);
-  // Stage progression: 0 = arrive, 1 = hold, 2 = open, 3 = emerge, 4 = done
+  // Stage progression — slowed considerably for dramatic effect:
+  //   0 (0-1000ms)    Envelope arrives, settles
+  //   1 (1000-2300ms) Hold beat — gold foil shimmer plays
+  //   2 (2300-2700ms) Wax seal breaks and falls away
+  //   3 (2700-3500ms) Top flap rotates open (held in opened position)
+  //   4 (3500-4500ms) Invitation card slides up out of envelope
+  //   5 (4500-5000ms) Card scales out, envelope dissolves
   useEffect(() => {
-    const t1 = setTimeout(() => setStage(1), 700);   // arrive complete, seal shines
-    const t2 = setTimeout(() => setStage(2), 1300);  // begin opening (was 1700 — shorter hold beat per design review)
-    const t3 = setTimeout(() => setStage(3), 1900);  // card emerges (was 2400)
-    const t4 = setTimeout(() => onComplete && onComplete(), 2400); // signal done (was 2900)
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+    const t1 = setTimeout(() => setStage(1), 1000);  // arrive complete
+    const t2 = setTimeout(() => setStage(2), 2300);  // seal breaks
+    const t3 = setTimeout(() => setStage(3), 2700);  // flap opens
+    const t4 = setTimeout(() => setStage(4), 3500);  // card slides up
+    const t5 = setTimeout(() => setStage(5), 4500);  // card expands out
+    const t6 = setTimeout(() => onComplete && onComplete(), 5000);
+    return () => {
+      [t1, t2, t3, t4, t5, t6].forEach(clearTimeout);
+    };
   }, [onComplete]);
 
-  // Envelope dimensions — slightly portrait, matches a real DL/A6 envelope.
-  const envW = 320; // px
-  const envH = 200;
-  const flapH = envH * 0.55; // top flap covers slightly over half
+  // Envelope dimensions — landscape proportions (DL/A6 envelope ratio)
+  const envW = 360;
+  const envH = 220;
+  const flapH = envH * 0.5; // top flap covers exactly half — V-fold seam at vertical centre
 
-  // Foil background used for envelope body, flap, and seal — same V2_GOLD_FOIL
-  // palette as logo/FAB/button so the gold reads unified across surfaces.
+  // Foil background used for envelope body, flap, and seal
   const foilBg = V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG;
+
+  // Organic wax-blob clip-path — irregular drip edges sampled from real wax
+  // stamps. Slightly asymmetric to read as natural wax rather than a circle.
+  const waxBlobClip =
+    "polygon(50% 0%, 62% 4%, 73% 8%, 84% 14%, 92% 24%, 96% 36%, 100% 48%, " +
+    "98% 60%, 95% 72%, 88% 82%, 82% 90%, 73% 96%, 64% 100%, 53% 99%, " +
+    "42% 100%, 31% 95%, 22% 88%, 14% 80%, 7% 70%, 3% 58%, 0% 46%, " +
+    "4% 34%, 10% 23%, 18% 14%, 28% 8%, 39% 3%)";
 
   return (
     <div
@@ -463,7 +480,7 @@ function V2EnvelopeReveal({ onComplete }) {
         zIndex: 200,
         pointerEvents: "none",
         background: "radial-gradient(ellipse at center, rgba(80, 60, 20, 0.35) 0%, rgba(15, 17, 26, 0.85) 60%, rgba(15, 17, 26, 0.95) 100%)",
-        animation: "v2-fade-in 400ms ease-out both",
+        animation: "v2-fade-in 500ms ease-out both",
         perspective: 1400,
       }}
     >
@@ -473,60 +490,63 @@ function V2EnvelopeReveal({ onComplete }) {
           position: "relative",
           width: envW, height: envH,
           maxWidth: "85vw",
-          animation: stage >= 3
-            ? "v2-card-expand 700ms cubic-bezier(0.55, 0.05, 0.85, 0.95) forwards, v2-envelope-dissolve 700ms ease-in forwards"
+          animation: stage >= 5
+            ? "v2-card-expand 900ms cubic-bezier(0.55, 0.05, 0.85, 0.95) forwards, v2-envelope-dissolve 900ms ease-in forwards"
             : stage === 0
-              ? "v2-envelope-arrive 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
+              ? "v2-envelope-arrive 1000ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
               : "none",
-          opacity: stage >= 3 ? undefined : 1,
+          transformStyle: "preserve-3d",
         }}
       >
-        {/* INVITATION CARD — sits inside the envelope; emerges in stage 2/3 */}
+        {/* INVITATION CARD — sits inside envelope; only renders during/after stage 4 */}
         <div
           style={{
             position: "absolute",
-            left: "8%", right: "8%",
-            top: "12%", bottom: "12%",
+            left: "6%", right: "6%",
+            top: "10%", bottom: "10%",
             background: "linear-gradient(135deg, #FFFCF5 0%, #FFF6E1 50%, #FFE9C2 100%)",
             borderRadius: 4,
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(218, 165, 32, 0.4) inset",
             zIndex: 2,
             transformOrigin: "center center",
-            animation: stage >= 2
-              ? "v2-card-emerge 700ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both"
+            animation: stage >= 4
+              ? "v2-card-emerge 1000ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both"
               : "none",
+            // Hide card until flap has finished opening (stage 3+).
+            // Before that, it sits inside the envelope, hidden behind the body.
+            opacity: stage >= 3 ? 1 : 0,
+            transition: stage === 3 ? "opacity 200ms ease-out 300ms" : "none",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: 16,
             overflow: "hidden",
           }}
         >
-          {/* Card content: actual 1-INSIDER wordmark in foil + letterhead */}
-          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
             <div style={{
-              fontSize: 7, color: "#8B5F18", letterSpacing: "0.25em",
+              fontSize: 8, color: "#8B5F18", letterSpacing: "0.3em",
               fontWeight: 700, fontFamily: FONT.b, opacity: 0.7,
             }}>
               YOUR EXCLUSIVE INVITATION
             </div>
-            <V2InsiderLogo width={180} dropShadow={false} />
+            <V2InsiderLogo width={200} dropShadow={false} />
             <div style={{
-              fontSize: 8, color: "#6B5230", marginTop: 2,
+              fontSize: 10, color: "#6B5230", marginTop: 4,
               fontFamily: FONT.h, fontStyle: "italic",
             }}>
               Welcome to the inner circle.
             </div>
             <div style={{
-              fontSize: 6, color: "#8B5F18", letterSpacing: "0.2em",
-              fontFamily: FONT.b, opacity: 0.55, marginTop: 4,
+              fontSize: 7, color: "#8B5F18", letterSpacing: "0.25em",
+              fontFamily: FONT.b, opacity: 0.55, marginTop: 6,
               borderTop: "0.5px solid rgba(218, 165, 32, 0.4)",
-              paddingTop: 4, width: 100,
+              paddingTop: 6, width: 110,
             }}>
               1-GROUP SINGAPORE
             </div>
           </div>
         </div>
 
-        {/* ENVELOPE BODY (back panel) — visible behind the card */}
+        {/* ENVELOPE BODY (back panel) — the rear interior visible after flap opens */}
         <div
           style={{
             position: "absolute", inset: 0,
@@ -539,21 +559,26 @@ function V2EnvelopeReveal({ onComplete }) {
           }}
         />
 
-        {/* ENVELOPE BOTTOM FOLD — the V-shaped flap visible on a real envelope back */}
+        {/* ENVELOPE FRONT PANEL — covers the front, hides the card until card slides up.
+            This is the "pocket" you put the card into. The flap rotates from above this. */}
         <div
           aria-hidden
           style={{
             position: "absolute",
             bottom: 0, left: 0, right: 0,
-            height: "60%",
-            background: "linear-gradient(135deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.18) 100%)",
-            clipPath: "polygon(0 100%, 50% 0, 100% 100%)",
+            height: "55%",
+            background: foilBg,
+            backgroundSize: "200% 100%, 100% 100%",
+            borderRadius: "0 0 6px 6px",
+            boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.2)",
+            animation: "v2-foil-shimmer 4s linear infinite",
             zIndex: 3,
-            pointerEvents: "none",
+            // Subtle V-shape line where the bottom fold would meet
+            backgroundImage: foilBg + ", linear-gradient(135deg, transparent 49%, rgba(0,0,0,0.15) 50%, transparent 51%), linear-gradient(225deg, transparent 49%, rgba(0,0,0,0.15) 50%, transparent 51%)",
           }}
         />
 
-        {/* ENVELOPE TOP FLAP — rotates open in stage 2 */}
+        {/* ENVELOPE TOP FLAP — V-cut shape, rotates from top hinge during stage 3 */}
         <div
           style={{
             position: "absolute",
@@ -563,50 +588,74 @@ function V2EnvelopeReveal({ onComplete }) {
             backgroundSize: "200% 100%, 100% 100%",
             clipPath: "polygon(0 0, 100% 0, 50% 100%)",
             transformOrigin: "top center",
-            animation: stage >= 2
-              ? "v2-flap-open 700ms cubic-bezier(0.45, 0.05, 0.4, 1) forwards, v2-foil-shimmer 4s linear infinite"
+            animation: stage >= 3
+              ? "v2-flap-open 800ms cubic-bezier(0.45, 0.05, 0.4, 1) forwards, v2-foil-shimmer 4s linear infinite"
               : "v2-foil-shimmer 4s linear infinite",
             zIndex: 5,
-            // Slight gold edge highlight along the V-fold seam
             filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))",
           }}
         />
 
-        {/* WAX SEAL — gold medallion bearing the actual 1-INSIDER wordmark */}
+        {/* WAX SEAL — anchored at the V-fold seam (where the flap point meets the body) */}
         <div
           style={{
             position: "absolute",
-            left: "50%", top: "50%",
+            left: "50%",
+            // V-fold seam sits at flapH from the top. Anchor seal so its
+            // CENTRE lands on the seam point (translateY -50%).
+            top: flapH + "px",
             transform: "translate(-50%, -50%)",
             width: 88, height: 88,
-            borderRadius: "50%",
-            background: "radial-gradient(circle at 35% 30%, #F6E5A0 0%, #D4A42D 35%, #B88320 70%, #8B5F18 100%)",
-            boxShadow: "0 0 0 1px rgba(255, 230, 150, 0.6) inset, 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 24px rgba(218, 165, 32, 0.5)",
             zIndex: 6,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            // Stage 2: seal breaks/falls — translates down and fades.
             opacity: stage >= 2 ? 0 : 1,
-            transition: stage >= 2 ? "opacity 200ms ease-out" : "none",
-            animation: stage === 0 ? "v2-seal-shine 800ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both" : "none",
-            // Inner seal ring — a faint dashed circle around the perimeter
-            // for the embossed-wax look.
-            backgroundClip: "padding-box",
+            translate: stage >= 2 ? "0 30px" : "0 0",
+            transition: stage >= 2
+              ? "opacity 400ms ease-in, translate 400ms cubic-bezier(0.55, 0.05, 0.85, 0.95)"
+              : "none",
+            animation: stage === 0 ? "v2-seal-shine 1100ms cubic-bezier(0.34, 1.56, 0.64, 1) 400ms both" : "none",
           }}
         >
-          {/* Embossed perimeter ring */}
+          {/* Wax blob — organic clip-path, NOT a circle */}
           <div
             aria-hidden
             style={{
-              position: "absolute", inset: 6,
+              position: "absolute", inset: 0,
+              background: "radial-gradient(circle at 32% 28%, #F6E5A0 0%, #D4A42D 22%, #B88320 55%, #8B5F18 85%, #5C3D14 100%)",
+              clipPath: waxBlobClip,
+              WebkitClipPath: waxBlobClip,
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.55)",
+              filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))",
+            }}
+          />
+          {/* Inner darker rim of the wax — gives the embossed depth */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", inset: "10%",
+              background: "radial-gradient(circle at 35% 30%, rgba(255,230,150,0.4) 0%, rgba(0,0,0,0) 40%), radial-gradient(circle at 65% 70%, rgba(0,0,0,0.25) 30%, rgba(0,0,0,0) 60%)",
               borderRadius: "50%",
-              border: "0.5px dashed rgba(58, 40, 16, 0.35)",
               pointerEvents: "none",
             }}
           />
-          {/* Actual 1-INSIDER wordmark, foil-stamped onto the seal.
-              Renders the same V2InsiderLogo component used on Login —
-              real logo silhouette via /insider-logo-mask.png + foil
-              gradient + v2-foil-shimmer animation. */}
-          <V2InsiderLogo width={62} dropShadow={false} style={{ filter: "drop-shadow(0 1px 0 rgba(255, 240, 200, 0.45))" }} />
+          {/* Keyhole-R glyph from the 1-INSIDER logo, embossed into the wax */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "50%", top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 42, height: 42,
+              background: "linear-gradient(135deg, #5C3D14 0%, #3A2810 50%, #5C3D14 100%)",
+              WebkitMaskImage: "url(/insider-keyhole-mask.png)",
+              maskImage: "url(/insider-keyhole-mask.png)",
+              WebkitMaskSize: "100% 100%",
+              maskSize: "100% 100%",
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+              filter: "drop-shadow(0 1px 0 rgba(255,240,200,0.45)) drop-shadow(0 -1px 0 rgba(0,0,0,0.4))",
+            }}
+          />
         </div>
       </div>
     </div>
@@ -1447,7 +1496,7 @@ function SignInV2({ onSuccess, onBack, revealing }) {
 
             <div
               onClick={handleBack}
-              style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
+              style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "#FFFFFF", fontWeight: 500, cursor: "pointer", letterSpacing: "0.02em" }}
             >
               ← Back
             </div>
@@ -1660,7 +1709,7 @@ function SignInV2({ onSuccess, onBack, revealing }) {
 
             <div
               onClick={handleChangeEmail}
-              style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: V2.textMuted, cursor: "pointer" }}
+              style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "#FFFFFF", fontWeight: 500, cursor: "pointer", letterSpacing: "0.02em" }}
             >
               ← Change email
             </div>
