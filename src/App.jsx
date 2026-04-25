@@ -1415,6 +1415,23 @@ function SignInV2({ onSuccess, onBack, revealing }) {
 }
 
 // ─── S3: Home — V2 helpers ────────────────────────────────────────────────
+// Silver tier uses a polished-metal conic gradient sampled from Chris's
+// Pantone 20-0002 TPM "Ice Palace" reference (silver_panetone.png): two
+// bright ray clusters around 45-67° and 202-225°, with darker valleys
+// around 146-157° and 292-303°. Pure greyscale — every stop is R=G=B.
+const V2_SILVER_METAL =
+  "radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.0) 42%), " +
+  "conic-gradient(from -90deg at 50% 50%, " +
+    "#C7C7C7 0deg, #D8D8D8 11deg, #E7E7E7 22deg, #FBFBFB 33deg, " +
+    "#FFFFFF 45deg, #FFFFFF 56deg, #FFFFFF 67deg, #F9F9F9 78deg, " +
+    "#E2E2E2 90deg, #CFCFCF 101deg, #BEBEBE 112deg, #AFAFAF 123deg, " +
+    "#A5A5A5 135deg, #9C9C9C 146deg, #9E9E9E 157deg, #ABABAB 168deg, " +
+    "#BDBDBD 180deg, #DBDBDB 191deg, #FEFEFE 202deg, #FFFFFF 213deg, " +
+    "#FEFEFE 225deg, #E1E1E1 236deg, #CACACA 247deg, #B8B8B8 258deg, " +
+    "#ADADAD 270deg, #A3A3A3 281deg, #9D9D9D 292deg, #9A9A9A 303deg, " +
+    "#A0A0A0 315deg, #A8A8A8 326deg, #AFAFAF 337deg, #BBBBBB 348deg, " +
+    "#C7C7C7 360deg)";
+
 // Gold tier uses a polished-metal conic gradient sampled from Chris's
 // reference image (gold2.png): four bright rays at ~11°/168°/236°/303°
 // with darker valleys at ~123°/270°, plus a soft radial highlight near
@@ -1431,7 +1448,7 @@ const V2_GOLD_METAL =
     "#CEA951 326deg, #C79E4E 337deg, #CFAD65 348deg, #E8CF7B 360deg)";
 
 const V2_TIER_GRADIENTS = {
-  silver:    "linear-gradient(135deg, #F2F3F5 0%, #F6EDEB 100%)",
+  silver:    V2_SILVER_METAL,
   gold:      V2_GOLD_METAL,
   platinum:  "linear-gradient(135deg, #F1EDFA 0%, #EDEBFA 50%, #9B97C9 100%)",
   corporate: "linear-gradient(135deg, #2A2D36 0%, #0F111A 100%)",
