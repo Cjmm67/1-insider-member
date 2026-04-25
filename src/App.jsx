@@ -1465,11 +1465,32 @@ const V2_GOLD_METAL =
     "#B4892A 281deg, #D2A741 292deg, #E6BD54 303deg, #DDB556 315deg, " +
     "#CEA951 326deg, #C79E4E 337deg, #CFAD65 348deg, #E8CF7B 360deg)";
 
+// Corporate tier uses a polished-metal conic gradient sampled from
+// Chris's Pantone 20-0168 TPM "Rustic Turquoise" reference
+// (turquoise.png). Contrast was boosted ~1.4× from the raw samples
+// since the reference swatch has a tighter brightness range than
+// gold/silver/platinum — the boost gives the metallic shimmer enough
+// punch to read on screen while staying within the rustic teal range.
+// Cool blue-green peaks at ~11° and ~168°, deeper teal valleys around
+// 67-101° and 247-281°.
+const V2_CORPORATE_METAL =
+  "radial-gradient(circle at 50% 45%, rgba(120, 200, 215, 0.28) 0%, rgba(80, 160, 180, 0.0) 38%), " +
+  "conic-gradient(from -90deg at 50% 50%, " +
+    "#295C6A 0deg, #2B616F 11deg, #2B5D6A 22deg, #25545C 33deg, " +
+    "#234D56 45deg, #204750 56deg, #1D4249 67deg, #1F424B 78deg, " +
+    "#1B3E46 90deg, #1C4048 101deg, #20444D 112deg, #1E434B 123deg, " +
+    "#214A55 135deg, #24535D 146deg, #275664 157deg, #2B5F6D 168deg, " +
+    "#2A5E6A 180deg, #295A67 191deg, #265562 202deg, #25545E 213deg, " +
+    "#26525B 225deg, #214A53 236deg, #204A53 247deg, #214A53 258deg, " +
+    "#214A53 270deg, #224C55 281deg, #224C55 292deg, #25515C 303deg, " +
+    "#26505C 315deg, #255361 326deg, #2A5C6B 337deg, #2A5E6A 348deg, " +
+    "#295C6A 360deg)";
+
 const V2_TIER_GRADIENTS = {
   silver:    V2_SILVER_METAL,
   gold:      V2_GOLD_METAL,
   platinum:  V2_PLATINUM_METAL,
-  corporate: "linear-gradient(135deg, #2A2D36 0%, #0F111A 100%)",
+  corporate: V2_CORPORATE_METAL,
   staff:     "linear-gradient(135deg, #4A8DFF 0%, #1E5FC9 100%)",
 };
 
