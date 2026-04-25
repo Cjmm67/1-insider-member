@@ -296,8 +296,29 @@ function V2Styles() {
       "@keyframes v2-slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }" +
       "@keyframes v2-fab-ignite { 0% { box-shadow: 0 0 0 0 rgba(245,215,166,0.5); } 100% { box-shadow: 0 0 0 80px rgba(245,215,166,0); } }" +
       "@keyframes v2-foil-shimmer { 0% { background-position: 200% 0%, 0% 0%; } 100% { background-position: -100% 0%, 0% 0%; } }" +
+      // Diagonal scroll reveal — clip-path polygon moves a TL→BR diagonal
+      // cut from the bottom-left corner up to the top-right, scrolling the
+      // cinematic away to reveal the gold-foil underside + login beneath.
+      "@keyframes v2-scroll-reveal { " +
+        "0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); } " +
+        "100% { clip-path: polygon(0 0, 100% 0, 100% -10%, 110% -10%); } " +
+      "}" +
+      // Gold-foil underside — fades in along the receding diagonal edge.
+      // The foil layer sits behind the cinematic; as the cinematic clips
+      // away from BL→TR, the foil becomes visible.
+      "@keyframes v2-foil-underside-reveal { " +
+        "0% { opacity: 0; transform: scale(1.05); } " +
+        "20% { opacity: 1; } " +
+        "100% { opacity: 1; transform: scale(1); } " +
+      "}" +
+      // Diagonal gold ridge — soft moving highlight along the cinematic's
+      // receding edge during the scroll, like the bright crest of a curl.
+      "@keyframes v2-scroll-edge-glow { " +
+        "0% { opacity: 0; } " +
+        "10% { opacity: 1; } " +
+        "100% { opacity: 0; } " +
+      "}" +
       "@keyframes v2-gold-shimmer { 0% { background-position: 200% 50%; } 50% { background-position: 0% 50%; } 100% { background-position: -200% 50%; } }" +
-      "@keyframes v2-page-curl-down { 0% { transform: rotateX(0deg); transform-origin: top center; } 100% { transform: rotateX(-95deg); transform-origin: top center; } }" +
       "@keyframes v2-glow-pulse { 0%, 100% { box-shadow: 0 0 32px rgba(245, 215, 166, 0.25); } 50% { box-shadow: 0 0 48px rgba(245, 215, 166, 0.4); } }" +
       "@keyframes v2-shimmer-once { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(100%); opacity: 1; } }" +
       "@media (prefers-reduced-motion: reduce) { " +
@@ -623,6 +644,24 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
   }, [heroImages.length]);
 
   return (
+    <>
+      {/* Gold-foil underside — sits behind the cinematic, exposed
+          progressively along the receding diagonal edge during peeling.
+          Same V2_GOLD_FOIL_BG + V2_GOLD_FOIL_SHEEN treatment as the FAB
+          and Login button so the gold is visually unified across surfaces. */}
+      {peeling && (
+        <div
+          aria-hidden
+          style={{
+            position: "fixed", inset: 0,
+            background: V2_GOLD_FOIL_SHEEN + ", " + V2_GOLD_FOIL_BG,
+            backgroundSize: "200% 100%, 100% 100%",
+            zIndex: 104,
+            animation: "v2-foil-underside-reveal 900ms ease-out both, v2-foil-shimmer 4s linear infinite",
+            pointerEvents: "none",
+          }}
+        />
+      )}
     <div
       style={{
         position: "fixed", inset: 0,
@@ -634,18 +673,15 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         filter: dimmed && !peeling ? "brightness(0.65) saturate(0.85)" : "none",
         transition: dimmed && !peeling ? "filter 520ms cubic-bezier(0.2, 0.8, 0.2, 1)" : "none",
         pointerEvents: dimmed ? "none" : "auto",
-        transformStyle: "preserve-3d",
-        perspective: 1400,
-        animation: peeling ? "v2-page-curl-down 900ms cubic-bezier(0.55, 0.05, 0.4, 0.95) forwards" : "none",
-        transformOrigin: "top center",
-        boxShadow: peeling ? "0 24px 80px rgba(0, 0, 0, 0.7)" : "none",
+        animation: peeling ? "v2-scroll-reveal 950ms cubic-bezier(0.55, 0.08, 0.45, 0.95) forwards" : "none",
+        boxShadow: peeling ? "0 -2px 0 rgba(245, 215, 166, 0.6), 0 24px 80px rgba(0, 0, 0, 0.7)" : "none",
       }}
     >
       <V2Styles />
       <style>{
         "@keyframes v2-kenburns { 0% { transform: scale(1.05); } 100% { transform: scale(1.15); } }"
       }</style>
-      {!dimmed && <V2Badge />}
+      {!dimmed && !peeling && <V2Badge />}
 
       {/* Hero compilation — crossfades between VENUE_DIRECTORY marquee thumbnails
           every 4.5s with a slow Ken Burns zoom. Replace with a single <video> once
@@ -780,6 +816,7 @@ function LandingV2({ onSignIn, dimmed, peeling }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
