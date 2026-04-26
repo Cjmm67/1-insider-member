@@ -1378,6 +1378,7 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(30);
+  const [intent, setIntent] = useState("signup"); // "signup" | "login" — set by which CTA was tapped
   const [expandedTier, setExpandedTier] = useState(null);
   const [sheetParent, setSheetParent] = useState(null);
   const [showCorporate, setShowCorporate] = useState(false);
@@ -1424,9 +1425,10 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
     return () => clearInterval(t);
   }, [panel]);
 
-  const proceedToVerify = () => {
+  const proceedToVerify = (chosenIntent) => {
     setError("");
     if (!email || !email.includes("@")) { setError("Enter a valid email address"); return; }
+    setIntent(chosenIntent === "login" ? "login" : "signup");
     setPanel(2);
   };
 
@@ -1435,24 +1437,35 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
     if (!otp || otp.length < 4) { setError("Enter the 6-digit code"); return; }
     setLoading(true);
     try {
-      // Email lookup. If found → sign in as that member.
-      // If NOT found → new user — route to SignUpV2 with the email pre-filled.
-      // Demo special case: enter "demo@1-group.sg" or any sophia.chen@email.com
-      // address to land in the existing demo account (Sophia, M0001).
       const trimmed = (email || "").trim().toLowerCase();
+      // Demo escape: 'demo@1-group.sg' always lands on Sophia, regardless of intent.
       if (trimmed === "demo@1-group.sg") {
         const m = await supaFetch("members?id=eq.M0001");
         if (Array.isArray(m) && m[0]) { onSuccess(m[0]); setLoading(false); return; }
       }
-      const m = await supaFetch("members?email=eq." + encodeURIComponent(email));
-      if (Array.isArray(m) && m[0]) {
-        onSuccess(m[0]);
-      } else if (typeof onNewUser === "function") {
-        // Fresh email — kick off the multi-step sign-up flow with the
-        // email pre-filled. Phase 2 + PDPA-aligned.
-        onNewUser(email);
+
+      const m = await supaFetch("members?email=eq." + encodeURIComponent(trimmed));
+      const exists = Array.isArray(m) && m[0];
+
+      if (intent === "signup") {
+        // Sign-up intent: route straight to SignUpV2 with email pre-filled.
+        // If the email already belongs to a member, surface a clear message
+        // rather than silently signing them in (avoids duplicate-account
+        // confusion + respects PDPA accuracy obligation).
+        if (exists) {
+          setError("This email is already a member. Tap 'Already a member? Log in' below to sign in.");
+          setLoading(false);
+          return;
+        }
+        if (typeof onNewUser === "function") onNewUser(trimmed);
+        else setError("Sign-up flow unavailable. Please refresh and try again.");
       } else {
-        setError("We don't recognise this email. Please sign up.");
+        // Login intent: must find the account. If we don't, offer to sign up.
+        if (exists) {
+          onSuccess(m[0]);
+        } else {
+          setError("We don't have an account for this email. Tap 'Sign Up' instead — your details will carry across.");
+        }
       }
     } catch (e) {
       setError("Connection error");
@@ -1563,7 +1576,7 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
 
               {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14 }}>{error}</div>}
 
-              <V2GoldButton onClick={proceedToVerify} style={{ marginBottom: 20 }}>Sign Up</V2GoldButton>
+              <V2GoldButton onClick={() => proceedToVerify("signup")} style={{ marginBottom: 20 }}>Sign Up</V2GoldButton>
 
               {/* Divider with "or" chip */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
@@ -1581,7 +1594,7 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
                 ].map(opt => (
                   <div
                     key={opt.id}
-                    onClick={proceedToVerify}
+                    onClick={() => proceedToVerify("signup")}
                     style={{
                       flex: 1,
                       padding: "14px 8px",
@@ -1617,7 +1630,7 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
               </div>
 
               <div style={{ textAlign: "center", fontSize: 12, color: V2.textSecondary }}>
-                Already a member? <span onClick={proceedToVerify} style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Log in</span>
+                Already a member? <span onClick={() => proceedToVerify("login")} style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Log in</span>
               </div>
             </V2GlassPanel>
 
