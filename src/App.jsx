@@ -1563,7 +1563,7 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
 
               {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14 }}>{error}</div>}
 
-              <V2GoldButton onClick={proceedToVerify} style={{ marginBottom: 20 }}>Login</V2GoldButton>
+              <V2GoldButton onClick={proceedToVerify} style={{ marginBottom: 20 }}>Sign Up</V2GoldButton>
 
               {/* Divider with "or" chip */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
@@ -1617,7 +1617,7 @@ function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
               </div>
 
               <div style={{ textAlign: "center", fontSize: 12, color: V2.textSecondary }}>
-                I'm a new user. <span onClick={proceedToVerify} style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Sign Up</span>
+                Already a member? <span onClick={proceedToVerify} style={{ color: V2.gold, cursor: "pointer", fontWeight: 600 }}>Log in</span>
               </div>
             </V2GlassPanel>
 
