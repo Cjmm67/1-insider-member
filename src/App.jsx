@@ -494,17 +494,17 @@ function V2EnvelopeReveal({ onComplete }) {
   //   4 (3500-5700ms) Card emerges (slow 2200ms slide up out of pocket).
   //                   Envelope simultaneously descends out of frame so
   //                   the card becomes the focal point.
-  //   5 (5700-7700ms) Card holds at viewport centre — 2 second reading beat
-  //   6 (7700-8500ms) Card slides DOWN off screen (envelope already gone)
-  //   7 (8500ms)      onComplete fires, login revealed
+  //   5 (5700-6700ms) Card holds at viewport centre — 1 second reading beat
+  //   6 (6700-7500ms) Card slides DOWN off screen (envelope already gone)
+  //   7 (7500ms)      onComplete fires, login revealed
   useEffect(() => {
     const t1 = setTimeout(() => setStage(1), 1000);
     const t2 = setTimeout(() => setStage(2), 2300);
     const t3 = setTimeout(() => setStage(3), 2700);
     const t4 = setTimeout(() => setStage(4), 3500);
     const t5 = setTimeout(() => setStage(5), 5700);
-    const t6 = setTimeout(() => setStage(6), 7700);
-    const t7 = setTimeout(() => onComplete && onComplete(), 8500);
+    const t6 = setTimeout(() => setStage(6), 6700);
+    const t7 = setTimeout(() => onComplete && onComplete(), 7500);
     return () => {
       [t1, t2, t3, t4, t5, t6, t7].forEach(clearTimeout);
     };
