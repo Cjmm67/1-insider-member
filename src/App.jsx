@@ -233,7 +233,7 @@ const VENUE_DIRECTORY = [
   },
 ];
 
-const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8, HISTORY: 9, EVENTS: 10 };
+const VIEW = { LANDING: 0, SIGNIN: 1, HOME: 2, REWARDS: 3, STAMPS: 4, PROFILE: 5, WALLET: 6, GIFTCARDS: 7, EXPLORE: 8, HISTORY: 9, EVENTS: 10, SIGNUP: 11 };
 
 const s = {
   app: { fontFamily: FONT.b, background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" },
@@ -1366,7 +1366,7 @@ function V2CorporateEnquiryModal({ onClose }) {
 // mandatory. Panel C's OTP verify reuses the Phase 1 demo fallback: any
 // 6-digit OTP resolves via Supabase member lookup (by email if possible,
 // otherwise Sophia Chen M0001 — identical to the Phase 2 U14 mock).
-function SignInV2({ onSuccess, onBack, revealing }) {
+function SignInV2({ onSuccess, onNewUser, onBack, revealing }) {
   // Panel 0 (brand moment) removed per feedback — direct-to-login flow.
   // Panel 1 = Login; Panel 2 = OTP verify.
   // The page-curl-down on LandingV2 reveals this panel, so panel 1's
@@ -1435,11 +1435,25 @@ function SignInV2({ onSuccess, onBack, revealing }) {
     if (!otp || otp.length < 4) { setError("Enter the 6-digit code"); return; }
     setLoading(true);
     try {
-      // Demo lookup: try email first, fall back to M0001 (Sophia Chen)
-      let m = await supaFetch("members?email=eq." + encodeURIComponent(email));
-      if (!Array.isArray(m) || !m.length) m = await supaFetch("members?id=eq.M0001");
-      if (Array.isArray(m) && m[0]) onSuccess(m[0]);
-      else setError("Verification failed");
+      // Email lookup. If found → sign in as that member.
+      // If NOT found → new user — route to SignUpV2 with the email pre-filled.
+      // Demo special case: enter "demo@1-group.sg" or any sophia.chen@email.com
+      // address to land in the existing demo account (Sophia, M0001).
+      const trimmed = (email || "").trim().toLowerCase();
+      if (trimmed === "demo@1-group.sg") {
+        const m = await supaFetch("members?id=eq.M0001");
+        if (Array.isArray(m) && m[0]) { onSuccess(m[0]); setLoading(false); return; }
+      }
+      const m = await supaFetch("members?email=eq." + encodeURIComponent(email));
+      if (Array.isArray(m) && m[0]) {
+        onSuccess(m[0]);
+      } else if (typeof onNewUser === "function") {
+        // Fresh email — kick off the multi-step sign-up flow with the
+        // email pre-filled. Phase 2 + PDPA-aligned.
+        onNewUser(email);
+      } else {
+        setError("We don't recognise this email. Please sign up.");
+      }
     } catch (e) {
       setError("Connection error");
     }
@@ -1839,6 +1853,599 @@ function SignInV2({ onSuccess, onBack, revealing }) {
     </>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SignUpV2 — Multi-step new-member sign-up flow
+// ═══════════════════════════════════════════════════════════════════════════
+// Triggered when SignInV2 detects an unrecognised email. PDPA-aligned:
+// granular consent (terms required, marketing optional), purpose limitation
+// stated inline, no pre-ticked boxes. Three panels:
+//   1. Your details — name, email (pre-filled, locked), mobile, birthday month
+//   2. Choose your tier — Silver (free) / Gold ($40) / Platinum ($80)
+//      Paid tiers route through a Stripe-checkout placeholder.
+//   3. Preferences & consent — category preference + terms + marketing opt-in
+// On submit: INSERT into members + welcome bonus transaction (acquisition
+// gamification by signup month) + tier audit trail. Then onSuccess routes
+// straight into HOME, signed in.
+// Requires Supabase columns: marketing_consent (bool), terms_accepted_at (tstz)
+// — DDL must be run via Supabase Dashboard (publishable key cannot ALTER).
+function SignUpV2({ prefillEmail, tiers, onSuccess, onBack }) {
+  const [step, setStep] = useState(1);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(prefillEmail || "");
+  const [mobile, setMobile] = useState("");
+  const [birthdayMonth, setBirthdayMonth] = useState("");
+  const [chosenTier, setChosenTier] = useState("silver");
+  const [categoryPref, setCategoryPref] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showStripeMock, setShowStripeMock] = useState(false);
+  const [stripeMockPhase, setStripeMockPhase] = useState("checkout"); // checkout | processing | done
+
+  const months = [
+    { v: 1, n: "January" }, { v: 2, n: "February" }, { v: 3, n: "March" },
+    { v: 4, n: "April" }, { v: 5, n: "May" }, { v: 6, n: "June" },
+    { v: 7, n: "July" }, { v: 8, n: "August" }, { v: 9, n: "September" },
+    { v: 10, n: "October" }, { v: 11, n: "November" }, { v: 12, n: "December" },
+  ];
+
+  const categories = [
+    { id: "cafes", label: "Cafés", icon: "☕" },
+    { id: "restaurants", label: "Restaurants", icon: "🍽" },
+    { id: "bars", label: "Bars", icon: "🍸" },
+    { id: "wines", label: "Wines", icon: "🍷" },
+  ];
+
+  const tierOptions = [
+    {
+      id: "silver", name: "Silver", fee: 0, feeLabel: "Free",
+      tagline: "Start your insider journey",
+      perks: ["$1 = 1 point", "10% birthday discount", "1 × $10 welcome voucher", "Café stamp card"],
+    },
+    {
+      id: "gold", name: "Gold", fee: 40, feeLabel: "$40 / yr",
+      tagline: "Best value for regulars",
+      perks: ["$1 = 1.5 points", "15% birthday discount", "10 × $20 dining vouchers", "Non-Stop Hits — unlimited refill", "Priority reservations"],
+      badge: "Most popular",
+    },
+    {
+      id: "platinum", name: "Platinum", fee: 80, feeLabel: "$80 / yr",
+      tagline: "The full insider experience",
+      perks: ["$1 = 2 points", "20% birthday discount", "10 × $25 dining vouchers", "Non-Stop Hits — unlimited refill", "VIP reservations", "Concierge service", "Chef's table access"],
+      badge: "Most rewarding",
+    },
+  ];
+
+  const validDetails = () =>
+    name.trim().length > 1 &&
+    email.includes("@") && email.length > 5 &&
+    mobile.replace(/\D/g, "").length >= 8 &&
+    birthdayMonth;
+
+  const proceedFromDetails = () => {
+    setError("");
+    if (!name.trim() || name.trim().length < 2) { setError("Please enter your full name"); return; }
+    if (!email.includes("@")) { setError("Please enter a valid email"); return; }
+    if (mobile.replace(/\D/g, "").length < 8) { setError("Please enter a valid Singapore mobile number"); return; }
+    if (!birthdayMonth) { setError("Please select your birthday month"); return; }
+    setStep(2);
+  };
+
+  const proceedFromTier = () => {
+    setError("");
+    if (chosenTier === "silver") {
+      setStep(3);
+    } else {
+      setShowStripeMock(true);
+      setStripeMockPhase("checkout");
+    }
+  };
+
+  const completeStripeMock = () => {
+    setStripeMockPhase("processing");
+    setTimeout(() => {
+      setStripeMockPhase("done");
+      setTimeout(() => {
+        setShowStripeMock(false);
+        setStep(3);
+      }, 800);
+    }, 1400);
+  };
+
+  const cancelStripeMock = () => {
+    setShowStripeMock(false);
+    setStripeMockPhase("checkout");
+  };
+
+  const submitSignup = async () => {
+    setError("");
+    if (!termsAccepted) { setError("Please accept the terms of membership to continue"); return; }
+    setLoading(true);
+    try {
+      // Generate next member ID. NB: not atomic — fine for demo, replace
+      // with a Supabase RPC + sequence before production.
+      const list = await supaFetch("members?select=id&order=id.desc&limit=1");
+      const last = (Array.isArray(list) && list[0] && list[0].id) || "M0000";
+      const nextNum = parseInt(last.slice(1), 10) + 1;
+      const newId = "M" + String(nextNum).padStart(4, "0");
+
+      // Singapore mobile formatting — accept with or without country code,
+      // store canonically as "+65 XXXXXXXX".
+      const digits = mobile.replace(/\D/g, "");
+      const local = digits.startsWith("65") && digits.length === 10 ? digits.slice(2) : digits;
+      const formattedMobile = "+65 " + local;
+
+      // Acquisition gamification — January 100 / February 150 / March 200
+      const signupMonth = new Date().getMonth() + 1;
+      const bonusByMonth = { 1: 100, 2: 150, 3: 200 };
+      const bonusPoints = bonusByMonth[signupMonth] || 0;
+
+      // Paid-tier expiry — 1 year from signup
+      let membershipExpiry = null;
+      if (chosenTier !== "silver") {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 1);
+        membershipExpiry = d.toISOString();
+      }
+
+      const newMember = {
+        id: newId,
+        name: name.trim(),
+        mobile: formattedMobile,
+        email: email.trim().toLowerCase(),
+        tier: chosenTier,
+        points: bonusPoints,
+        total_spend: 0,
+        category_pref: categoryPref || null,
+        birthday_month: parseInt(birthdayMonth, 10),
+        signup_date: new Date().toISOString(),
+        visits: 0,
+        stamps: 0,
+        voucher_sets_used: 0,
+        membership_expiry: membershipExpiry,
+        marketing_consent: marketingConsent,
+        terms_accepted_at: new Date().toISOString(),
+      };
+
+      const inserted = await supaFetch("members", { method: "POST", body: newMember });
+
+      // Welcome bonus transaction — acquisition gamification audit trail
+      if (bonusPoints > 0) {
+        await supaFetch("transactions", {
+          method: "POST",
+          body: {
+            member_id: newId,
+            venue: "1-Insider Rewards",
+            amount: 0,
+            points: bonusPoints,
+            type: "earn",
+            reward_name: "Welcome bonus",
+            note: "Acquisition gamification — " + new Date().toLocaleString("en-SG", { month: "long" }) + " signup",
+          },
+        });
+      }
+
+      // Tier signup transaction — audit trail for paid tiers
+      if (chosenTier !== "silver") {
+        await supaFetch("transactions", {
+          method: "POST",
+          body: {
+            member_id: newId,
+            venue: "1-Insider Rewards",
+            amount: chosenTier === "gold" ? 40 : 80,
+            points: 0,
+            type: "adjust",
+            reward_name: "Tier signup: " + chosenTier,
+            note: "Demo Stripe checkout · expires " + (membershipExpiry ? new Date(membershipExpiry).toLocaleDateString("en-SG") : "—"),
+          },
+        });
+      }
+
+      setStep(4);
+      // Brief success animation before signing the user in.
+      setTimeout(() => {
+        const signedInMember = (Array.isArray(inserted) && inserted[0]) ? inserted[0] : newMember;
+        onSuccess(signedInMember);
+      }, 1800);
+    } catch (e) {
+      console.error("Signup failed:", e);
+      const msg = (e && e.message) || "Could not create your account. Please try again.";
+      // Friendlier messaging for known failure modes
+      const friendly = /marketing_consent|terms_accepted_at/.test(msg)
+        ? "Database not yet updated for sign-up. Please run the marketing_consent + terms_accepted_at migration in Supabase."
+        : /duplicate key|unique/.test(msg)
+        ? "This mobile number or email is already registered. Try signing in instead."
+        : msg;
+      setError(friendly);
+      setLoading(false);
+    }
+  };
+
+  // Reusable shell — V2 dark glass panel matching SignInV2
+  const shell = (children) => (
+    <>
+      <V2Styles />
+      <V2Badge />
+      <div
+        style={{
+          position: "fixed", inset: 0,
+          background: V2.bg,
+          color: V2.text,
+          fontFamily: FONT.b,
+          overflowY: "auto",
+          zIndex: 110,
+          animation: "v2-fade-in 400ms ease-out",
+        }}
+      >
+        <div style={{ minHeight: "100vh", padding: "60px 24px 60px", maxWidth: 480, margin: "0 auto" }}>
+          <V2GlassPanel>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
+              <V2InsiderLogo width={150} style={{ maxWidth: "55%" }} lighter />
+            </div>
+            {children}
+          </V2GlassPanel>
+        </div>
+      </div>
+    </>
+  );
+
+  // Step indicator dots
+  const StepDots = ({ current }) => (
+    <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 24 }}>
+      {[1, 2, 3].map(n => (
+        <div
+          key={n}
+          style={{
+            width: n === current ? 28 : 8,
+            height: 8,
+            borderRadius: 4,
+            background: n <= current ? V2.gold : V2.divider,
+            transition: "all 300ms ease-out",
+          }}
+        />
+      ))}
+    </div>
+  );
+
+  // ── STEP 1: DETAILS ─────────────────────────────────────────────────────
+  if (step === 1) {
+    return shell(
+      <>
+        <StepDots current={1} />
+        <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, color: "#fff", textAlign: "center", marginBottom: 8 }}>
+          Welcome to 1-Insider
+        </div>
+        <div style={{ fontSize: 13, color: "#fff", opacity: 0.75, textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>
+          Let's set up your account.
+        </div>
+
+        <V2TextInput label="Full name" value={name} onChange={setName} placeholder="Jane Tan" autoFocus />
+
+        <V2TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="you@example.com" />
+
+        {/* Mobile with +65 prefix */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 8 }}>
+            Mobile number
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{
+              background: V2.elevated, border: "1px solid " + V2.divider, borderRadius: 10,
+              padding: "14px 16px", color: V2.textSecondary, fontFamily: FONT.m, fontSize: 14, minWidth: 64, textAlign: "center",
+            }}>+65</div>
+            <input
+              value={mobile}
+              onChange={e => setMobile(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              type="tel"
+              placeholder="8123 4567"
+              style={{
+                flex: 1,
+                background: V2.elevated, border: "1px solid " + V2.divider, borderRadius: 10,
+                padding: "14px 16px", color: V2.text, fontFamily: FONT.b, fontSize: 15, outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Birthday month picker */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 8 }}>
+            Birthday month
+          </div>
+          <div style={{ fontSize: 11, color: V2.textMuted, marginBottom: 8 }}>
+            We'll surprise you with a tier-based discount during your birthday month.
+          </div>
+          <select
+            value={birthdayMonth}
+            onChange={e => setBirthdayMonth(e.target.value)}
+            style={{
+              width: "100%",
+              background: V2.elevated, border: "1px solid " + V2.divider, borderRadius: 10,
+              padding: "14px 16px", color: birthdayMonth ? V2.text : V2.textMuted, fontFamily: FONT.b, fontSize: 15,
+              outline: "none", boxSizing: "border-box", appearance: "none",
+              backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M6 8L0 0h12z' fill='%236B6E76'/></svg>\")",
+              backgroundRepeat: "no-repeat", backgroundPosition: "right 16px center",
+            }}
+          >
+            <option value="" style={{ background: V2.elevated, color: V2.textMuted }}>Select month…</option>
+            {months.map(m => (
+              <option key={m.v} value={m.v} style={{ background: V2.elevated, color: V2.text }}>{m.n}</option>
+            ))}
+          </select>
+        </div>
+
+        {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14, textAlign: "center" }}>{error}</div>}
+
+        <V2GoldButton onClick={proceedFromDetails} style={{ marginBottom: 14 }}>Continue</V2GoldButton>
+
+        <div style={{ textAlign: "center", fontSize: 11, color: V2.textMuted, lineHeight: 1.5 }}>
+          By continuing you agree to our use of this information to manage your membership.
+          You'll choose your marketing preferences in the next step.
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 18 }}>
+          <span onClick={onBack} style={{ fontSize: 12, color: V2.textSecondary, cursor: "pointer" }}>← Back to sign in</span>
+        </div>
+      </>
+    );
+  }
+
+  // ── STEP 2: TIER PICKER ─────────────────────────────────────────────────
+  if (step === 2) {
+    return shell(
+      <>
+        <StepDots current={2} />
+        <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, color: "#fff", textAlign: "center", marginBottom: 8 }}>
+          Choose your membership
+        </div>
+        <div style={{ fontSize: 13, color: "#fff", opacity: 0.75, textAlign: "center", marginBottom: 22, lineHeight: 1.5 }}>
+          You can upgrade later from your profile.
+        </div>
+
+        {tierOptions.map(t => {
+          const selected = chosenTier === t.id;
+          const isPlatinum = t.id === "platinum";
+          const isGold = t.id === "gold";
+          return (
+            <div
+              key={t.id}
+              onClick={() => setChosenTier(t.id)}
+              style={{
+                padding: 18,
+                marginBottom: 12,
+                borderRadius: 14,
+                background: selected
+                  ? (isPlatinum ? "linear-gradient(135deg,#3a3a3a,#1a1a1a 60%,#4a4a4a)" :
+                     isGold ? "linear-gradient(135deg,#C5A258,#D4B978 50%,#A88B3A)" :
+                     "linear-gradient(135deg,#e8e8e8,#d0d0d0)")
+                  : V2.elevated,
+                border: selected ? "1.5px solid " + V2.gold : "1px solid " + V2.divider,
+                cursor: "pointer",
+                color: selected ? (isPlatinum ? "#fff" : "#1A1D27") : V2.text,
+                position: "relative",
+                transition: "all 200ms ease-out",
+                boxShadow: selected ? "0 8px 24px rgba(245,215,166,0.18)" : "none",
+              }}
+            >
+              {t.badge && (
+                <div style={{
+                  position: "absolute", top: -10, right: 14,
+                  background: V2.gold, color: V2.textOnGold,
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                  padding: "4px 10px", borderRadius: 12,
+                }}>{t.badge}</div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                <div>
+                  <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700 }}>{t.name}</div>
+                  <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>{t.tagline}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: FONT.h, fontSize: 18, fontWeight: 700 }}>{t.feeLabel}</div>
+                </div>
+              </div>
+              <div style={{ borderTop: selected ? "1px solid rgba(0,0,0,0.15)" : "1px solid " + V2.divider, paddingTop: 10, marginTop: 10 }}>
+                {t.perks.slice(0, selected ? t.perks.length : 3).map((p, i) => (
+                  <div key={i} style={{ fontSize: 12, marginBottom: 4, opacity: 0.92 }}>
+                    <span style={{ marginRight: 6, opacity: 0.6 }}>✓</span>{p}
+                  </div>
+                ))}
+                {!selected && t.perks.length > 3 && (
+                  <div style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>+ {t.perks.length - 3} more</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14, textAlign: "center" }}>{error}</div>}
+
+        <V2GoldButton onClick={proceedFromTier} style={{ marginTop: 8, marginBottom: 12 }}>
+          {chosenTier === "silver" ? "Continue with Silver" : "Continue with " + tierOptions.find(t => t.id === chosenTier).name + " · " + tierOptions.find(t => t.id === chosenTier).feeLabel}
+        </V2GoldButton>
+
+        <div style={{ textAlign: "center" }}>
+          <span onClick={() => setStep(1)} style={{ fontSize: 12, color: V2.textSecondary, cursor: "pointer" }}>← Back</span>
+        </div>
+
+        {/* Stripe checkout placeholder modal */}
+        {showStripeMock && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 200, padding: 20,
+          }} onClick={stripeMockPhase === "checkout" ? cancelStripeMock : undefined}>
+            <div style={{
+              background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 380,
+              fontFamily: FONT.b, color: "#1A1D27",
+            }} onClick={e => e.stopPropagation()}>
+              {stripeMockPhase === "checkout" && (
+                <>
+                  <div style={{ fontSize: 11, color: "#6B6E76", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 8 }}>
+                    Secure checkout · powered by Stripe
+                  </div>
+                  <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+                    {tierOptions.find(t => t.id === chosenTier).name} membership
+                  </div>
+                  <div style={{ fontSize: 13, color: "#6B6E76", marginBottom: 18 }}>
+                    {tierOptions.find(t => t.id === chosenTier).feeLabel} · annual
+                  </div>
+                  <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: 12, fontSize: 11, color: "#5D4037", marginBottom: 16, lineHeight: 1.5 }}>
+                    <strong>⚠️ Demo placeholder</strong> — JEPL's real Stripe account isn't wired up yet. Tapping below completes the demo signup at this tier without taking payment.
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid #eee", fontSize: 13 }}>
+                    <span>Annual fee</span>
+                    <strong>${tierOptions.find(t => t.id === chosenTier).fee}.00</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid #eee", fontSize: 14, fontWeight: 700 }}>
+                    <span>Total today</span>
+                    <span>${tierOptions.find(t => t.id === chosenTier).fee}.00 SGD</span>
+                  </div>
+                  <button
+                    onClick={completeStripeMock}
+                    style={{
+                      width: "100%", marginTop: 16,
+                      background: "#635BFF", color: "#fff", border: "none", borderRadius: 8,
+                      padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT.b,
+                    }}
+                  >Pay ${tierOptions.find(t => t.id === chosenTier).fee}.00 (demo)</button>
+                  <button
+                    onClick={cancelStripeMock}
+                    style={{
+                      width: "100%", marginTop: 8,
+                      background: "transparent", color: "#6B6E76", border: "none",
+                      padding: "10px", fontSize: 12, cursor: "pointer", fontFamily: FONT.b,
+                    }}
+                  >Cancel</button>
+                </>
+              )}
+              {stripeMockPhase === "processing" && (
+                <div style={{ textAlign: "center", padding: "20px 0" }}>
+                  <div style={{
+                    width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#635BFF",
+                    borderRadius: "50%", margin: "0 auto 14px", animation: "spin 0.8s linear infinite",
+                  }} />
+                  <div style={{ fontSize: 13, color: "#6B6E76" }}>Processing payment…</div>
+                </div>
+              )}
+              {stripeMockPhase === "done" && (
+                <div style={{ textAlign: "center", padding: "20px 0" }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Payment confirmed</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ── STEP 3: PREFERENCES & CONSENT ───────────────────────────────────────
+  if (step === 3) {
+    return shell(
+      <>
+        <StepDots current={3} />
+        <div style={{ fontFamily: FONT.h, fontSize: 22, fontWeight: 600, color: "#fff", textAlign: "center", marginBottom: 8 }}>
+          Almost there
+        </div>
+        <div style={{ fontSize: 13, color: "#fff", opacity: 0.75, textAlign: "center", marginBottom: 22, lineHeight: 1.5 }}>
+          Tell us what you love and review the basics.
+        </div>
+
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: V2.textSecondary, marginBottom: 8 }}>
+          Favourite category <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 22 }}>
+          {categories.map(c => (
+            <div
+              key={c.id}
+              onClick={() => setCategoryPref(categoryPref === c.id ? "" : c.id)}
+              style={{
+                padding: "14px 12px",
+                borderRadius: 10,
+                background: categoryPref === c.id ? "rgba(245, 215, 166, 0.12)" : V2.elevated,
+                border: "1px solid " + (categoryPref === c.id ? V2.gold : V2.divider),
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 200ms",
+              }}
+            >
+              <div style={{ fontSize: 22, marginBottom: 4 }}>{c.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: V2.text }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Consent block — PDPA-aligned: granular, separate, no pre-ticking */}
+        <div style={{ background: V2.elevated, borderRadius: 12, padding: 16, marginBottom: 14, border: "1px solid " + V2.divider }}>
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer", marginBottom: 14 }}>
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={e => setTermsAccepted(e.target.checked)}
+              style={{
+                width: 18, height: 18, marginTop: 2, accentColor: V2.gold, cursor: "pointer", flexShrink: 0,
+              }}
+            />
+            <div style={{ fontSize: 12, color: V2.text, lineHeight: 1.5 }}>
+              <strong style={{ color: "#fff" }}>Required.</strong> I accept the <span style={{ color: V2.gold, textDecoration: "underline" }}>1-Insider Terms of Membership</span> and <span style={{ color: V2.gold, textDecoration: "underline" }}>Privacy Notice</span>. I understand 1-Group will use my data to manage my membership, issue rewards, and contact me about my account.
+            </div>
+          </label>
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={marketingConsent}
+              onChange={e => setMarketingConsent(e.target.checked)}
+              style={{
+                width: 18, height: 18, marginTop: 2, accentColor: V2.gold, cursor: "pointer", flexShrink: 0,
+              }}
+            />
+            <div style={{ fontSize: 12, color: V2.text, lineHeight: 1.5 }}>
+              <strong style={{ color: "#fff" }}>Optional.</strong> Yes, send me 1-Insider news, special offers, and event invitations by email and SMS. I can change my mind anytime in my profile.
+            </div>
+          </label>
+        </div>
+
+        <div style={{ fontSize: 10, color: V2.textMuted, lineHeight: 1.5, marginBottom: 18, textAlign: "center" }}>
+          Personal data is processed in accordance with the Singapore Personal Data Protection Act 2012.
+        </div>
+
+        {error && <div style={{ color: "#FF8A80", fontSize: 12, marginBottom: 14, textAlign: "center" }}>{error}</div>}
+
+        <V2GoldButton onClick={submitSignup} disabled={loading || !termsAccepted} style={{ marginBottom: 12 }}>
+          {loading ? "Creating your account…" : "Complete sign-up"}
+        </V2GoldButton>
+
+        <div style={{ textAlign: "center" }}>
+          <span onClick={() => setStep(2)} style={{ fontSize: 12, color: V2.textSecondary, cursor: "pointer" }}>← Back</span>
+        </div>
+      </>
+    );
+  }
+
+  // ── STEP 4: SUCCESS ─────────────────────────────────────────────────────
+  return shell(
+    <div style={{ textAlign: "center", padding: "40px 0" }}>
+      <div style={{
+        width: 72, height: 72, borderRadius: "50%",
+        background: "linear-gradient(135deg, #F5D7A6, #C79A5A)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        margin: "0 auto 18px", fontSize: 36, color: "#1A1D27", fontWeight: 700,
+        animation: "v2-pulse 1.6s ease-out infinite",
+      }}>✓</div>
+      <div style={{ fontFamily: FONT.h, fontSize: 24, fontWeight: 600, color: "#fff", marginBottom: 8 }}>
+        Welcome to 1-Insider
+      </div>
+      <div style={{ fontSize: 13, color: "#fff", opacity: 0.75, marginBottom: 24, lineHeight: 1.5 }}>
+        Your {tierOptions.find(t => t.id === chosenTier).name} membership is active. Signing you in…
+      </div>
+    </div>
+  );
+}
+
 
 // ─── S3: Home — V2 helpers ────────────────────────────────────────────────
 // Platinum tier uses a polished-metal conic gradient sampled from
@@ -4600,6 +5207,7 @@ export default function App() {
   const [view, setView] = useState(VIEW.LANDING);
   const [member, setMember] = useState(null);
   const [showPay, setShowPay] = useState(false);
+  const [signupEmail, setSignupEmail] = useState(""); // SignUpV2 prefill
   const [peeling, setPeeling] = useState(false); // Landing → SignIn envelope reveal
 
   // Envelope-reveal orchestrator: cinematic dims, premium invitation envelope
@@ -4677,7 +5285,7 @@ export default function App() {
         "* { box-sizing: border-box; margin: 0; padding: 0; }"
       }</style>
 
-      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && !(view === VIEW.HISTORY && !classic) && !(view === VIEW.EVENTS && !classic) && (
+      {view !== VIEW.LANDING && view !== VIEW.SIGNIN && view !== VIEW.SIGNUP && !(view === VIEW.HOME && !classic) && !(view === VIEW.EXPLORE && !classic) && !(view === VIEW.HISTORY && !classic) && !(view === VIEW.EVENTS && !classic) && (
         <div style={s.header}>
           <div style={s.logo}>✦ 1-INSIDER</div>
           {member && (
@@ -4728,8 +5336,17 @@ export default function App() {
       {view === VIEW.SIGNIN && !classic && (
         <SignInV2
           onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); }}
+          onNewUser={(email) => { setSignupEmail(email || ""); setView(VIEW.SIGNUP); }}
           onBack={() => setView(VIEW.LANDING)}
           revealing={peeling}
+        />
+      )}
+      {view === VIEW.SIGNUP && (
+        <SignUpV2
+          prefillEmail={signupEmail}
+          tiers={tiers}
+          onSuccess={(m) => { setMember(m); loadMemberData(m.id); setView(VIEW.HOME); setSignupEmail(""); }}
+          onBack={() => { setSignupEmail(""); setView(VIEW.SIGNIN); }}
         />
       )}
       {/* Premium envelope reveal layer — covers viewport during the transition,
@@ -4806,7 +5423,7 @@ export default function App() {
           classic mode (which uses the inline header sign-out). Hidden
           during the envelope reveal (peeling=true) so it doesn't interrupt
           the cinematic. */}
-      {!classic && member && view !== VIEW.LANDING && view !== VIEW.SIGNIN && !peeling && (
+      {!classic && member && view !== VIEW.LANDING && view !== VIEW.SIGNIN && view !== VIEW.SIGNUP && !peeling && (
         <button
           onClick={signOut}
           aria-label="Sign out"
@@ -7797,6 +8414,85 @@ function Profile({ member, tiers, signOut, reload }) {
   var info = TIER_INFO[member.tier] || TIER_INFO.silver;
   var isDark = ["platinum", "corporate"].includes(member.tier);
 
+  // U17-member: profile edit mode — toggleable form for self-service edits.
+  // Mobile + Member ID stay read-only (Eber: one mobile = one account).
+  // Tier sits in its own card with its own upgrade flow (U11).
+  const [editing, setEditing] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaveStatus, setProfileSaveStatus] = useState(null); // null | "saved" | "error"
+  const [profileSaveError, setProfileSaveError] = useState("");
+  const [editName, setEditName] = useState(member.name || "");
+  const [editEmail, setEditEmail] = useState(member.email || "");
+  const [editBirthdayMonth, setEditBirthdayMonth] = useState(member.birthday_month || "");
+  const [editCategoryPref, setEditCategoryPref] = useState(member.category_pref || "");
+  const [editMarketingConsent, setEditMarketingConsent] = useState(!!member.marketing_consent);
+
+  // Re-sync form state when the underlying member changes (e.g. after reload).
+  useEffect(() => {
+    setEditName(member.name || "");
+    setEditEmail(member.email || "");
+    setEditBirthdayMonth(member.birthday_month || "");
+    setEditCategoryPref(member.category_pref || "");
+    setEditMarketingConsent(!!member.marketing_consent);
+  }, [member.id, member.name, member.email, member.birthday_month, member.category_pref, member.marketing_consent]);
+
+  const monthOptions = [
+    { v: 1, n: "January" }, { v: 2, n: "February" }, { v: 3, n: "March" },
+    { v: 4, n: "April" }, { v: 5, n: "May" }, { v: 6, n: "June" },
+    { v: 7, n: "July" }, { v: 8, n: "August" }, { v: 9, n: "September" },
+    { v: 10, n: "October" }, { v: 11, n: "November" }, { v: 12, n: "December" },
+  ];
+  const categoryOptions = [
+    { id: "", label: "No preference" },
+    { id: "cafes", label: "Cafés" },
+    { id: "restaurants", label: "Restaurants" },
+    { id: "bars", label: "Bars" },
+    { id: "wines", label: "Wines" },
+  ];
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setProfileSaveStatus(null);
+    setProfileSaveError("");
+    // Reset form to current values
+    setEditName(member.name || "");
+    setEditEmail(member.email || "");
+    setEditBirthdayMonth(member.birthday_month || "");
+    setEditCategoryPref(member.category_pref || "");
+    setEditMarketingConsent(!!member.marketing_consent);
+  };
+
+  const saveProfile = async () => {
+    setProfileSaveError("");
+    if (!editName.trim() || editName.trim().length < 2) { setProfileSaveError("Please enter your full name"); return; }
+    if (!editEmail.includes("@")) { setProfileSaveError("Please enter a valid email"); return; }
+    if (!editBirthdayMonth) { setProfileSaveError("Please select your birthday month"); return; }
+    setSavingProfile(true);
+    try {
+      const patch = {
+        name: editName.trim(),
+        email: editEmail.trim().toLowerCase(),
+        birthday_month: parseInt(editBirthdayMonth, 10),
+        category_pref: editCategoryPref || null,
+        marketing_consent: !!editMarketingConsent,
+      };
+      await supaFetch("members?id=eq." + member.id, { method: "PATCH", body: patch });
+      setProfileSaveStatus("saved");
+      setEditing(false);
+      if (reload) reload();
+      setTimeout(() => setProfileSaveStatus(null), 2400);
+    } catch (e) {
+      console.error("Profile save failed:", e);
+      const msg = (e && e.message) || "Could not save changes. Please try again.";
+      const friendly = /marketing_consent/.test(msg)
+        ? "Database not yet updated. Please run the marketing_consent migration in Supabase."
+        : msg;
+      setProfileSaveError(friendly);
+      setProfileSaveStatus("error");
+    }
+    setSavingProfile(false);
+  };
+
   // U11 state — upgrade modal
   const [upgradeTarget, setUpgradeTarget] = useState(null); // the target tier row when modal is open
   const [upgradePhase, setUpgradePhase] = useState("picking"); // picking | processing | success | error
@@ -7893,21 +8589,134 @@ function Profile({ member, tiers, signOut, reload }) {
         <div style={{ fontFamily: FONT.m, fontSize: 10, opacity: 0.5, marginTop: 8 }}>{member.id}</div>
       </div>
 
-      <h3 style={s.h3}>Account Details</h3>
-      <div style={s.card}>
-        {[
-          { l: "Mobile", v: member.mobile || "—" },
-          { l: "Email", v: member.email || "—" },
-          { l: "Birthday Month", v: member.birthday_month ? "Month " + member.birthday_month : "—" },
-          { l: "Member Since", v: member.signup_date ? new Date(member.signup_date).toLocaleDateString() : "—" },
-          { l: "Last Visit", v: member.last_visit ? new Date(member.last_visit).toLocaleDateString() : "—" },
-        ].map((d, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 4 ? "1px solid #f5f5f5" : "none", fontSize: 12.5 }}>
-            <span style={{ color: C.muted }}>{d.l}</span>
-            <span style={{ fontWeight: 500 }}>{d.v}</span>
-          </div>
-        ))}
+      {/* Save toast (success or error) */}
+      {profileSaveStatus === "saved" && (
+        <div style={{ background: "#E8F5E9", border: "1px solid #A5D6A7", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#1B5E20", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+          <span>✅</span><span>Profile updated.</span>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <h3 style={{ ...s.h3, marginBottom: 0 }}>Account Details</h3>
+        {!editing && (
+          <span
+            onClick={() => { setEditing(true); setProfileSaveStatus(null); setProfileSaveError(""); }}
+            style={{ fontSize: 12, color: C.gold, cursor: "pointer", fontWeight: 600, display: "flex", gap: 6, alignItems: "center" }}
+          >
+            <span style={{ fontSize: 13 }}>✎</span> Edit
+          </span>
+        )}
       </div>
+
+      {!editing && (
+        <div style={s.card}>
+          {[
+            { l: "Mobile", v: member.mobile || "—", note: "Contact us to change" },
+            { l: "Email", v: member.email || "—" },
+            { l: "Birthday Month", v: member.birthday_month ? (monthOptions.find(mo => mo.v === member.birthday_month) || {}).n || ("Month " + member.birthday_month) : "—" },
+            { l: "Favourite Category", v: member.category_pref ? (categoryOptions.find(co => co.id === member.category_pref) || {}).label || member.category_pref : "—" },
+            { l: "Marketing Comms", v: member.marketing_consent ? "On" : "Off" },
+            { l: "Member Since", v: member.signup_date ? new Date(member.signup_date).toLocaleDateString() : "—" },
+            { l: "Last Visit", v: member.last_visit ? new Date(member.last_visit).toLocaleDateString() : "—" },
+          ].map((d, i, arr) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none", fontSize: 12.5, alignItems: "baseline", gap: 8 }}>
+              <span style={{ color: C.muted, flexShrink: 0 }}>{d.l}</span>
+              <span style={{ fontWeight: 500, textAlign: "right" }}>
+                {d.v}
+                {d.note && (
+                  <span style={{ display: "block", fontSize: 10, color: C.lmuted, fontWeight: 400, marginTop: 2 }}>{d.note}</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <div style={s.card}>
+          {/* Mobile + Member ID — read-only with explanation */}
+          <div style={{ background: "#FAFAFA", borderRadius: 8, padding: "10px 12px", marginBottom: 14, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+            <strong>Mobile:</strong> {member.mobile || "—"} · <strong>ID:</strong> {member.id}<br/>
+            Mobile and Member ID can't be changed here — one mobile = one account in our loyalty platform. Contact us if you've changed numbers.
+          </div>
+
+          <label style={{ display: "block", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 }}>Full name</div>
+            <input
+              type="text"
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              style={s.input}
+              placeholder="Jane Tan"
+            />
+          </label>
+
+          <label style={{ display: "block", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 }}>Email</div>
+            <input
+              type="email"
+              value={editEmail}
+              onChange={e => setEditEmail(e.target.value)}
+              style={s.input}
+              placeholder="you@example.com"
+            />
+          </label>
+
+          <label style={{ display: "block", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 }}>Birthday month</div>
+            <select
+              value={editBirthdayMonth}
+              onChange={e => setEditBirthdayMonth(e.target.value)}
+              style={{ ...s.input, appearance: "none" }}
+            >
+              <option value="">Select month…</option>
+              {monthOptions.map(m => (
+                <option key={m.v} value={m.v}>{m.n}</option>
+              ))}
+            </select>
+          </label>
+
+          <label style={{ display: "block", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 }}>Favourite category</div>
+            <select
+              value={editCategoryPref}
+              onChange={e => setEditCategoryPref(e.target.value)}
+              style={{ ...s.input, appearance: "none" }}
+            >
+              {categoryOptions.map(c => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Marketing consent toggle — granular, separate from terms (PDPA) */}
+          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={editMarketingConsent}
+                onChange={e => setEditMarketingConsent(e.target.checked)}
+                style={{ width: 16, height: 16, marginTop: 2, accentColor: C.gold, cursor: "pointer", flexShrink: 0 }}
+              />
+              <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                <strong>Marketing communications</strong><br/>
+                <span style={{ color: C.muted }}>Receive 1-Insider news, special offers, and event invitations by email and SMS. Change anytime.</span>
+              </div>
+            </label>
+          </div>
+
+          {profileSaveError && (
+            <div style={{ color: "#D32F2F", fontSize: 12, marginBottom: 10 }}>{profileSaveError}</div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={cancelEdit} disabled={savingProfile} style={{ ...s.btnOutline, flex: 1, color: C.muted, borderColor: "#ddd" }}>Cancel</button>
+            <button onClick={saveProfile} disabled={savingProfile} style={{ ...s.btn, flex: 1, opacity: savingProfile ? 0.6 : 1 }}>
+              {savingProfile ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <h3 style={s.h3}>Tier Status</h3>
       <div style={s.card}>
