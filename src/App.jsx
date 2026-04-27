@@ -3184,15 +3184,20 @@ function HomeV2({ member, transactions, vouchers, giftCards, bookings, events, t
           </div>
         </div>
         <div
+          onClick={() => setView(VIEW.PROFILE)}
           style={{
             width: 40, height: 40, borderRadius: 9999,
-            background: V2.card, border: "1px solid " + V2.divider,
+            background: V2.card, border: "1px solid " + V2.goldBorder,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: V2.textSecondary, fontSize: 18, cursor: "pointer",
+            color: V2.gold, fontSize: 14, cursor: "pointer", fontWeight: 600,
+            fontFamily: FONT.h, letterSpacing: "0.02em",
+            transition: "all 200ms ease-out",
           }}
-          title="Notifications"
+          title="Profile, activity & settings"
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(245, 215, 166, 0.12)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = V2.card; }}
         >
-          ◉
+          {((member.name || "?")[0] || "?").toUpperCase()}
         </div>
       </div>
 
